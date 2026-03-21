@@ -10,12 +10,21 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { NotesService } from './notes.service';
+import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiFindAllNotes,
+  ApiCreateNote,
+  ApiFindOneNote,
+  CreateNoteDto,
+} from './notes.swagger';
 
+@ApiTags('notes')
 @Controller('notes')
 export class NotesController {
   constructor(private readonly notesService: NotesService) {}
 
   @Get()
+  @ApiFindAllNotes()
   async findAll(@Req() req: Request, @Res() res: Response) {
     const notes = await this.notesService.findAll();
     const accept = req.headers.accept || '';
@@ -33,6 +42,7 @@ export class NotesController {
   }
 
   @Post()
+  @ApiCreateNote()
   async create(
     @Body() body: { title: string; content: string },
     @Res() res: Response,
@@ -42,6 +52,7 @@ export class NotesController {
   }
 
   @Get(':id')
+  @ApiFindOneNote()
   async findOne(
     @Param('id') id: string,
     @Req() req: Request,
