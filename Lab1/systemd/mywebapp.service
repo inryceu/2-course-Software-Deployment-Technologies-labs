@@ -1,0 +1,18 @@
+[Unit]
+Description=MyWebApp Service
+Requires=mywebapp.socket
+After=network.target mariadb.service
+
+[Service]
+Type=simple
+User=app
+WorkingDirectory=/opt/mywebapp
+
+EnvironmentFile=/opt/mywebapp/.env
+NonBlocking=true
+
+ExecStart=/usr/bin/node dist/src/main.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
