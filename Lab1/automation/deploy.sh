@@ -24,6 +24,8 @@ DB_PASS=$3
 APP_TARGET="/opt/mywebapp"
 SOURCE_DIR="../mywebapp"
 
+EXEC_DIR=$(pwd)
+
 echo -e "${GREEN}=== Розгортання з параметрами: DB=$DB_NAME, USER=$DB_USER ===${NC}"
 
 log "Встановлення залежностей..."
@@ -69,16 +71,30 @@ pnpm exec prisma db push --accept-data-loss
 
 chown -R app:app $APP_TARGET
 
-[ -f "../systemd/mywebapp.socket" ] && cp ../systemd/mywebapp.socket /etc/systemd/system/
-[ -f "../systemd/mywebapp.service" ] && cp ../systemd/mywebapp.service /etc/systemd/system/
+log "Оновлення файлів Systemd..."
+
+[ -f "$EXEC_DIR/../systemd/mywebapp.socket" ] && cp "$EXEC_DIR/../systemd/mywebapp.socket" /etc/systemd/system/
+[ -f "$EXEC_DIR/../systemd/mywebapp.service" ] && cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now mywebapp.socket
 
-if [ -f "../nginx/mywebapp.conf" ]; then
-    cp ../nginx/mywebapp.conf /etc/nginx/sites-available/mywebapp
-    ln -sf /etc/nginx/sites-available/mywebapp /etc/nginx/sites-enabled/
+log "Оновлення файлів Nginx..."
+if [ -f "$EXEC_DIR/../nginx/mywebapp.conf" ]; then
+    rm -f /etc/nginx/sites-available/mywebapp
+    rm -f /etc/nginx/sites-enabled/mywebapp
+    
+    cp "$EXEC_DIR/../nginx/mywebapp.conf" /etc/nginx/sites-available/mywebapp
+    ln -sf /etc/nginx/sites-available/mywebapp /etc/nginx/sites-enabled/mywebapp
     rm -f /etc/nginx/sites-enabled/default
-    systemctl restart nginx
+    
+    if nginx -t; then
+        systemctl restart nginx
+        log "Nginx успішно налаштовано та перезапущено."
+    else
+        error "Помилка конфігурації Nginx! Перевір файл mywebapp.conf."
+    fi
+else
+    warn "Файл Nginx не знайдено за шляхом: $EXEC_DIR/../nginx/mywebapp.conf"
 fi
 
 echo -e "${GREEN}=== РОЗГОРТАННЯ ЗАВЕРШЕНО ===${NC}"
