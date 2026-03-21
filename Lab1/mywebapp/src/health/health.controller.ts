@@ -17,7 +17,9 @@ export class HealthController {
       await this.prisma.$queryRaw`SELECT 1`;
       return res.status(HttpStatus.OK).send('OK');
     } catch (error) {
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send('Database connection failed or database is not ready');
+      return res
+        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+        .send('Database connection failed or database is not ready');
     }
   }
 }
