@@ -82,38 +82,47 @@ mariadb -e "FLUSH PRIVILEGES;"
 APP_TARGET="/opt/mywebapp"
 SOURCE_DIR="../mywebapp"
 
-log "Підготовка директорії $APP_TARGET..."
-mkdir -p $APP_TARGET
+log "Перехід до вихідного коду ($SOURCE_DIR) для підготовки..."
+cd "$EXEC_DIR/$SOURCE_DIR"
 
-log "Встановлення залежностей через pnpm..."
+log "Встановлення залежностей (Source)..."
 $PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей."
 
-log "Генерація Prisma Client та міграція БД..."
+log "Генерація Prisma Client (Source) для уникнення помилок TypeScript..."
 $PNPM_BIN exec prisma generate
 check_status "Не вдалося згенерувати Prisma Client."
 
-$PNPM_BIN exec prisma db push --accept-data-loss
-check_status "Не вдалося синхронізувати схему БД."
+log "Збірка проєкту (Build)..."
+$PNPM_BIN run build
+check_status "Помилка під час збірки проєкту."
 
-if [ ! -d "$EXEC_DIR/$SOURCE_DIR/dist" ]; then
-    warn "Папка dist відсутня. Починаю збірку..."
-    cd "$EXEC_DIR/$SOURCE_DIR"
-    $PNPM_BIN install --config.ignore-scripts=false
-    $PNPM_BIN run build
-    cd "$EXEC_DIR"
-fi
+log "Підготовка директорії $APP_TARGET..."
+mkdir -p $APP_TARGET
 
 log "Копіювання файлів..."
-cp -r "$EXEC_DIR/$SOURCE_DIR/dist" $APP_TARGET/
-cp "$EXEC_DIR/$SOURCE_DIR/package.json" $APP_TARGET/
-cp "$EXEC_DIR/$SOURCE_DIR/pnpm-lock.yaml" $APP_TARGET/
-cp -r "$EXEC_DIR/$SOURCE_DIR/prisma" $APP_TARGET/
+cp -r dist $APP_TARGET/
+cp package.json $APP_TARGET/
+cp pnpm-lock.yaml $APP_TARGET/
+cp -r prisma $APP_TARGET/
+
+log "Перехід до робочої директорії ($APP_TARGET)..."
+cd $APP_TARGET
 
 log "Налаштування .env для Prisma..."
-echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > $APP_TARGET/.env
+echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
 
-cd $APP_TARGET
+log "Встановлення залежностей (Target)..."
+$PNPM_BIN install --config.ignore-scripts=false
+check_status "Помилка встановлення залежностей у цільовій папці."
+
+log "Генерація Prisma Client (Target) для робочого середовища..."
+$PNPM_BIN exec prisma generate
+check_status "Не вдалося згенерувати Prisma Client у цільовій папці."
+
+log "Синхронізація схеми БД..."
+$PNPM_BIN exec prisma db push --accept-data-loss
+check_status "Не вдалося синхронізувати схему БД."
 
 chown -R app:app $APP_TARGET
 
