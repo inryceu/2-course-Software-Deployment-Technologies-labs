@@ -7,12 +7,18 @@ async function bootstrap() {
 
   setupSwagger(app);
 
-  if (process.env.LISTEN_FDS && parseInt(process.env.LISTEN_FDS, 10) > 0) {
+  console.log('DEBUG: LISTEN_FDS =', process.env.LISTEN_FDS);
+
+  const listenFds = parseInt(process.env.LISTEN_FDS ?? '0', 10);
+
+  if (listenFds > 0) {
     console.log('Starting via Systemd Socket Activation (FD 3)');
-    await app.listen(3);
+    await app.getHttpServer().listen({ fd: 3 });
   } else {
-    console.log('Starting via standard port binding (5200)');
-    await app.listen(5200, '127.0.0.1');
+    const port = 5200;
+    const host = '127.0.0.1';
+    console.log(`Starting via standard port binding (${host}:${port})`);
+    await app.listen(port, host);
   }
 }
 bootstrap();
