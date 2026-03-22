@@ -18,7 +18,18 @@ check_status() {
     fi
 }
 
-echo -e "${GREEN}=== Початок розгортання mywebapp (Debian 13 + pnpm + Prisma) ===${NC}"
+if [ "$#" -ne 3 ]; then
+    error "Недостатньо аргументів!"
+    echo -e "${YELLOW}Використання: sudo $0 <db_name> <db_user> <db_password>${NC}"
+    exit 1
+fi
+
+DB_NAME=$1
+DB_USER=$2
+DB_PASS=$3
+EXEC_DIR=$(pwd) 
+
+echo -e "${GREEN}=== Початок розгортання mywebapp ===${NC}"
 
 log "Встановлення системних пакетів..."
 apt-get update && apt-get install -y mariadb-server nginx curl sudo git ufw
@@ -37,8 +48,8 @@ check_status "Не вдалося встановити pnpm."
 create_user_safe() {
     if ! id "$1" &>/dev/null; then
         log "Створення користувача $1..."
-        useradd -m -s /bin/bash -c "$2" "$1"
-        echo "$1:12345678" | chpasswd
+        PASS_HASH=$(openssl passwd -6 "12345678")
+        useradd -m -s /bin/bash -c "$2" -p "$PASS_HASH" "$1"
         chage -d 0 "$1"
     else
         warn "Користувач $1 вже існує."
@@ -57,8 +68,8 @@ echo "operator ALL=(ALL) NOPASSWD: /bin/systemctl start mywebapp, /bin/systemctl
 chmod 0440 /etc/sudoers.d/operator
 
 log "Налаштування бази даних..."
-systemctl start mariadb
-systemctl enable mariadb
+systemctl start mariadb || systemctl start mysql
+systemctl enable mariadb || systemctl enable mysql
 
 mariadb -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
 mariadb -e "CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
@@ -71,19 +82,19 @@ SOURCE_DIR="../mywebapp"
 log "Підготовка директорії $APP_TARGET..."
 mkdir -p $APP_TARGET
 
-if [ ! -d "$SOURCE_DIR/dist" ]; then
+if [ ! -d "$EXEC_DIR/$SOURCE_DIR/dist" ]; then
     warn "Папка dist відсутня. Починаю збірку..."
-    cd "$SOURCE_DIR"
-    pnpm install
-    pnpm run build
-    cd - > /dev/null
+    cd "$EXEC_DIR/$SOURCE_DIR"
+    npx pnpm install --config.ignore-scripts=false
+    npx pnpm run build
+    cd "$EXEC_DIR"
 fi
 
 log "Копіювання файлів..."
-cp -r "$SOURCE_DIR/dist" $APP_TARGET/
-cp "$SOURCE_DIR/package.json" $APP_TARGET/
-cp "$SOURCE_DIR/pnpm-lock.yaml" $APP_TARGET/
-cp -r "$SOURCE_DIR/prisma" $APP_TARGET/
+cp -r "$EXEC_DIR/$SOURCE_DIR/dist" $APP_TARGET/
+cp "$EXEC_DIR/$SOURCE_DIR/package.json" $APP_TARGET/
+cp "$EXEC_DIR/$SOURCE_DIR/pnpm-lock.yaml" $APP_TARGET/
+cp -r "$EXEC_DIR/$SOURCE_DIR/prisma" $APP_TARGET/
 
 log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > $APP_TARGET/.env
@@ -91,31 +102,35 @@ echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > $APP
 cd $APP_TARGET
 
 log "Встановлення залежностей через pnpm..."
-pnpm install --prod
+npx pnpm install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей."
 
 log "Генерація Prisma Client та міграція БД..."
-npx prisma generate
+npx pnpm exec prisma generate
 check_status "Не вдалося згенерувати Prisma Client."
 
-npx prisma db push
+npx pnpm exec prisma db push --accept-data-loss
 check_status "Не вдалося синхронізувати схему БД."
 
 chown -R app:app $APP_TARGET
 
 log "Активація системних служб..."
-if [ -d "../systemd" ]; then
-    cp ../systemd/mywebapp.socket /etc/systemd/system/
-    cp ../systemd/mywebapp.service /etc/systemd/system/
+if [ -d "$EXEC_DIR/../systemd" ]; then
+    cp "$EXEC_DIR/../systemd/mywebapp.socket" /etc/systemd/system/
+    cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable --now mywebapp.socket
 fi
 
-if [ -f "../nginx/mywebapp.conf" ]; then
-    cp ../nginx/mywebapp.conf /etc/nginx/sites-available/mywebapp
+if [ -f "$EXEC_DIR/../nginx/mywebapp.conf" ]; then
+    rm -f /etc/nginx/sites-available/mywebapp
+    rm -f /etc/nginx/sites-enabled/mywebapp
+    cp "$EXEC_DIR/../nginx/mywebapp.conf" /etc/nginx/sites-available/mywebapp
     ln -sf /etc/nginx/sites-available/mywebapp /etc/nginx/sites-enabled/
     rm -f /etc/nginx/sites-enabled/default
-    systemctl restart nginx
+    if /usr/sbin/nginx -t; then
+        systemctl restart nginx
+    fi
 fi
 
 echo "14840136" > /home/student/gradebook
