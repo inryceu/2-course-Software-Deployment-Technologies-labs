@@ -85,6 +85,17 @@ SOURCE_DIR="../mywebapp"
 log "Підготовка директорії $APP_TARGET..."
 mkdir -p $APP_TARGET
 
+log "Встановлення залежностей через pnpm..."
+$PNPM_BIN install --config.ignore-scripts=false
+check_status "Помилка встановлення залежностей."
+
+log "Генерація Prisma Client та міграція БД..."
+$PNPM_BIN exec prisma generate
+check_status "Не вдалося згенерувати Prisma Client."
+
+$PNPM_BIN exec prisma db push --accept-data-loss
+check_status "Не вдалося синхронізувати схему БД."
+
 if [ ! -d "$EXEC_DIR/$SOURCE_DIR/dist" ]; then
     warn "Папка dist відсутня. Починаю збірку..."
     cd "$EXEC_DIR/$SOURCE_DIR"
@@ -103,17 +114,6 @@ log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > $APP_TARGET/.env
 
 cd $APP_TARGET
-
-log "Встановлення залежностей через pnpm..."
-$PNPM_BIN install --config.ignore-scripts=false
-check_status "Помилка встановлення залежностей."
-
-log "Генерація Prisma Client та міграція БД..."
-$PNPM_BIN exec prisma generate
-check_status "Не вдалося згенерувати Prisma Client."
-
-$PNPM_BIN exec prisma db push --accept-data-loss
-check_status "Не вдалося синхронізувати схему БД."
 
 chown -R app:app $APP_TARGET
 
