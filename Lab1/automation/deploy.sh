@@ -32,7 +32,7 @@ EXEC_DIR=$(pwd)
 echo -e "${GREEN}=== Початок розгортання mywebapp (Debian 13 + pnpm + Prisma) ===${NC}"
 
 log "Встановлення системних пакетів..."
-apt-get update && apt-get install -y mariadb-server nginx curl sudo git ufw
+apt-get update && apt-get install -y npm mariadb-server nginx curl sudo git ufw
 check_status "Не вдалося встановити системні пакети."
 
 if ! command -v node &> /dev/null; then
