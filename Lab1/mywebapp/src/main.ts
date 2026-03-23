@@ -13,6 +13,7 @@ async function bootstrap() {
 
   if (listenFds > 0) {
     console.log('Starting via Systemd Socket Activation (FD 3)');
+    await app.init();
     await app.getHttpServer().listen({ fd: 3 });
   } else {
     const port = 5200;
