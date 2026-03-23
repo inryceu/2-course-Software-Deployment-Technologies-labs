@@ -29,7 +29,7 @@ DB_USER=$2
 DB_PASS=$3
 EXEC_DIR=$(pwd) 
 
-echo -e "${GREEN}=== Початок розгортання mywebapp (Debian 13 + pnpm + Prisma) ===${NC}"
+echo -e "${GREEN}=== Початок розгортання mywebapp ===${NC}"
 
 log "Встановлення системних пакетів..."
 apt-get update && apt-get install -y npm mariadb-server nginx curl sudo git ufw
