@@ -148,9 +148,13 @@ log "Встановлення залежностей (Target)..."
 $PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей у цільовій папці."
 
+log "Очищення Prisma кешу..."
+rm -rf node_modules/.prisma 2>/dev/null || true
+rm -rf node_modules/@prisma/client 2>/dev/null || true
+
 log "Генерація Prisma Client (Target) з правильним DATABASE_URL..."
-# Генеруємо з явно вказаним DATABASE_URL щоб уникнути кешування
-DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate
+# Генеруємо з явно вказаним DATABASE_URL і очищеним кешем
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate --force
 check_status "Не вдалося згенерувати Prisma Client у цільовій папці."
 
 log "Синхронізація схеми БД..."
