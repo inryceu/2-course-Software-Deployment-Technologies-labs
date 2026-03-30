@@ -141,7 +141,7 @@ log "Перехід до робочої директорії ($APP_TARGET)..."
 cd $APP_TARGET
 
 log "Налаштування .env для Prisma..."
-echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
+echo "DATABASE_URL=mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" > .env
 cat .env  # Показуємо що записали
 
 log "Встановлення залежностей (Target)..."
@@ -168,21 +168,42 @@ chown -R app:app $APP_TARGET
 
 log "Активація системних служб..."
 if [ -d "$EXEC_DIR/../systemd" ]; then
-    cp "$EXEC_DIR/../systemd/mywebapp.socket" /etc/systemd/system/
-    cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
-    systemctl daemon-reload
+    log "Зупинка старих служб і очищення..."
     
-    # Скидаємо failed status якщо був
-    systemctl reset-failed mywebapp.service 2>/dev/null || true
-    systemctl reset-failed mywebapp.socket 2>/dev/null || true
-    
-    # Зупиняємо старі процеси
+    # ПОРЯДОК ВАЖЛИВИЙ: спочатку зупиняємо сервіс, потім сокет
     systemctl stop mywebapp.service 2>/dev/null || true
     systemctl stop mywebapp.socket 2>/dev/null || true
     
-    # Запускаємо заново
+    # Вбиваємо всі залишкові node процеси користувача app
+    pkill -9 -u app node 2>/dev/null || true
+    
+    # Перевіряємо чи порт 5200 ще зайнятий і звільняємо його
+    if lsof -i :5200 >/dev/null 2>&1; then
+        warn "Порт 5200 все ще зайнятий, вбиваємо процеси..."
+        lsof -t -i :5200 | xargs -r kill -9 2>/dev/null || true
+    fi
+    
+    # Видаляємо Unix socket файл якщо існує (на всяк випадок)
+    rm -f /run/mywebapp.sock 2>/dev/null || true
+    
+    # Даємо час системі звільнити порт
+    sleep 2
+    
+    # Скидаємо failed status
+    systemctl reset-failed mywebapp.service 2>/dev/null || true
+    systemctl reset-failed mywebapp.socket 2>/dev/null || true
+    
+    log "Копіювання systemd конфігів..."
+    cp "$EXEC_DIR/../systemd/mywebapp.socket" /etc/systemd/system/
+    cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
+    
+    log "Перезавантаження systemd daemon..."
+    systemctl daemon-reload
+    
+    log "Запуск служб..."
     systemctl enable mywebapp.socket
     systemctl start mywebapp.socket
+    systemctl start mywebapp.service
     systemctl start mywebapp.service
     
     # Чекаємо трохи і перевіряємо статус
