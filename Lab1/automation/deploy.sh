@@ -82,9 +82,18 @@ systemctl enable mariadb || systemctl enable mysql
 
 mariadb -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
 mariadb -e "CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
-mariadb -e "ALTER USER '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';" 2>/dev/null || true
+# КРИТИЧНО: примусово оновлюємо пароль, навіть якщо користувач існував
+mariadb -e "ALTER USER '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
 mariadb -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'127.0.0.1';"
 mariadb -e "FLUSH PRIVILEGES;"
+
+log "Перевірка підключення до БД..."
+if mariadb -u "$DB_USER" -p"$DB_PASS" -h 127.0.0.1 "$DB_NAME" -e "SELECT 1;" &>/dev/null; then
+    log "✓ Підключення до БД успішне!"
+else
+    error "Не вдалося підключитися до БД з credentials: $DB_USER:***@127.0.0.1:3306/$DB_NAME"
+    exit 1
+fi
 
 log "Перехід до вихідного коду ($SOURCE_DIR) для підготовки..."
 cd "$EXEC_DIR/$SOURCE_DIR"
@@ -133,18 +142,23 @@ cd $APP_TARGET
 
 log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
+cat .env  # Показуємо що записали
 
 log "Встановлення залежностей (Target)..."
 $PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей у цільовій папці."
 
-log "Генерація Prisma Client (Target) для робочого середовища..."
-$PNPM_BIN exec prisma generate
+log "Генерація Prisma Client (Target) з правильним DATABASE_URL..."
+# Генеруємо з явно вказаним DATABASE_URL щоб уникнути кешування
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate
 check_status "Не вдалося згенерувати Prisma Client у цільовій папці."
 
 log "Синхронізація схеми БД..."
-$PNPM_BIN exec prisma db push --accept-data-loss
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma db push --accept-data-loss
 check_status "Не вдалося синхронізувати схему БД."
+
+log "Тестування підключення Prisma..."
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma db execute --stdin <<< "SELECT 1;" &>/dev/null && log "✓ Prisma підключення працює!" || warn "Prisma підключення може мати проблеми"
 
 chown -R app:app $APP_TARGET
 
@@ -153,9 +167,28 @@ if [ -d "$EXEC_DIR/../systemd" ]; then
     cp "$EXEC_DIR/../systemd/mywebapp.socket" /etc/systemd/system/
     cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable --now mywebapp.socket
+    
+    # Скидаємо failed status якщо був
     systemctl reset-failed mywebapp.service 2>/dev/null || true
-    systemctl restart mywebapp.service
+    systemctl reset-failed mywebapp.socket 2>/dev/null || true
+    
+    # Зупиняємо старі процеси
+    systemctl stop mywebapp.service 2>/dev/null || true
+    systemctl stop mywebapp.socket 2>/dev/null || true
+    
+    # Запускаємо заново
+    systemctl enable mywebapp.socket
+    systemctl start mywebapp.socket
+    systemctl start mywebapp.service
+    
+    # Чекаємо трохи і перевіряємо статус
+    sleep 2
+    if systemctl is-active --quiet mywebapp.service; then
+        log "✓ mywebapp.service запущено успішно!"
+    else
+        warn "mywebapp.service не активний, перевіряємо логи..."
+        journalctl -u mywebapp.service -n 20 --no-pager
+    fi
 fi
 
 if [ -f "$EXEC_DIR/../nginx/mywebapp.conf" ]; then
@@ -173,3 +206,35 @@ echo "14840136" > /home/student/gradebook
 chown student:student /home/student/gradebook
 
 echo -e "${GREEN}=== РОЗГОРТАННЯ ЗАВЕРШЕНО УСПІШНО! ===${NC}"
+
+log "Фінальна перевірка..."
+sleep 2
+
+# Перевірка чи app слухає на порту 5200
+if ss -tlnp | grep -q ":5200"; then
+    log "✓ Додаток слухає на порту 5200"
+    
+    # Тестуємо endpoint
+    if curl -sf http://127.0.0.1:5200/health/alive &>/dev/null; then
+        log "✓ Health endpoint відповідає!"
+        echo -e "${GREEN}"
+        echo "╔════════════════════════════════════════╗"
+        echo "║   ✓ DEPLOYMENT УСПІШНИЙ!              ║"
+        echo "║                                        ║"
+        echo "║   Доступ:                              ║"
+        echo "║   • http://localhost/api/docs          ║"
+        echo "║   • http://localhost/notes             ║"
+        echo "╚════════════════════════════════════════╝"
+        echo -e "${NC}"
+    else
+        warn "Порт 5200 слухає, але health endpoint не відповідає"
+        warn "Перевір логи: sudo journalctl -u mywebapp.service -n 50"
+    fi
+else
+    error "Додаток НЕ слухає на порту 5200!"
+    error "Статус служби:"
+    systemctl status mywebapp.service --no-pager -l
+    error "Логи:"
+    journalctl -u mywebapp.service -n 30 --no-pager
+    exit 1
+fi
