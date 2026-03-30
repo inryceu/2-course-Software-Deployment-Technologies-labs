@@ -27,9 +27,15 @@ fi
 DB_NAME=$1
 DB_USER=$2
 DB_PASS=$3
-EXEC_DIR=$(pwd) 
+EXEC_DIR=$(pwd)
+APP_TARGET="/opt/mywebapp"
+SOURCE_DIR="../mywebapp"
 
 echo -e "${GREEN}=== Початок розгортання mywebapp ===${NC}"
+
+log "Очищення цільової директорії $APP_TARGET..."
+mkdir -p $APP_TARGET
+rm -rf ${APP_TARGET:?}
 
 log "Встановлення системних пакетів..."
 apt-get update && apt-get install -y npm mariadb-server nginx curl sudo git ufw
@@ -52,7 +58,7 @@ create_user_safe() {
     if ! id "$1" &>/dev/null; then
         log "Створення користувача $1..."
         PASS_HASH=$(openssl passwd -6 "12345678")
-        useradd -m -s /bin/bash -c "$2" -p "$PASS_HASH" "$1"
+        useradd -m -s /bin/bash -g users -c "$2" -p "$PASS_HASH" "$1"
         chage -d 0 "$1"
     else
         warn "Користувач $1 вже існує."
@@ -76,14 +82,15 @@ systemctl enable mariadb || systemctl enable mysql
 
 mariadb -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
 mariadb -e "CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
+mariadb -e "ALTER USER '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';" 2>/dev/null || true
 mariadb -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'127.0.0.1';"
 mariadb -e "FLUSH PRIVILEGES;"
 
-APP_TARGET="/opt/mywebapp"
-SOURCE_DIR="../mywebapp"
-
 log "Перехід до вихідного коду ($SOURCE_DIR) для підготовки..."
 cd "$EXEC_DIR/$SOURCE_DIR"
+
+log "Очищення попередніх збірок для чистого білду..."
+rm -rf dist node_modules
 
 log "Встановлення залежностей (Source)..."
 $PNPM_BIN install --config.ignore-scripts=false
@@ -97,9 +104,6 @@ log "Збірка проєкту (Build)..."
 $PNPM_BIN run build
 check_status "Помилка під час збірки проєкту."
 
-log "Підготовка директорії $APP_TARGET..."
-mkdir -p $APP_TARGET
-
 log "Копіювання файлів..."
 cp -r dist $APP_TARGET/
 cp package.json $APP_TARGET/
@@ -112,8 +116,8 @@ cd $APP_TARGET
 log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
 
-log "Встановлення залежностей (Target)..."
-$PNPM_BIN install --config.ignore-scripts=false
+log "Встановлення production залежностей (Target)..."
+$PNPM_BIN install --prod
 check_status "Помилка встановлення залежностей у цільовій папці."
 
 log "Генерація Prisma Client (Target) для робочого середовища..."
@@ -132,6 +136,8 @@ if [ -d "$EXEC_DIR/../systemd" ]; then
     cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable --now mywebapp.socket
+    systemctl reset-failed mywebapp.service 2>/dev/null || true
+    systemctl restart mywebapp.service
 fi
 
 if [ -f "$EXEC_DIR/../nginx/mywebapp.conf" ]; then
