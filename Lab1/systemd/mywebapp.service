@@ -10,8 +10,11 @@ WorkingDirectory=/opt/mywebapp
 
 EnvironmentFile=/opt/mywebapp/.env
 NonBlocking=true
+StandardInput=socket
+StandardOutput=journal
+StandardError=journal
 
-ExecStart=/usr/bin/node dist/main.js
+ExecStart=/usr/bin/node dist/src/main.js
 Restart=on-failure
 
 [Install]
