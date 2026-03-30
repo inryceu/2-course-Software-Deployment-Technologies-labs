@@ -82,7 +82,7 @@ systemctl enable mariadb || systemctl enable mysql
 
 mariadb -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
 mariadb -e "CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
-# КРИТИЧНО: примусово оновлюємо пароль, навіть якщо користувач існував
+
 mariadb -e "ALTER USER '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
 mariadb -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'127.0.0.1';"
 mariadb -e "FLUSH PRIVILEGES;"
@@ -115,7 +115,6 @@ log "Збірка проєкту (Build)..."
 $PNPM_BIN run build
 check_status "Помилка під час збірки проєкту."
 
-# Перевірка чи dist створився
 if [ ! -d "dist" ]; then
     error "dist/ не створився після білду! Перевіряємо структуру:"
     ls -la
@@ -130,7 +129,6 @@ cp package.json $APP_TARGET/
 cp pnpm-lock.yaml $APP_TARGET/
 cp -r prisma $APP_TARGET/
 
-# Перевірка що файли скопіювались
 if [ ! -d "$APP_TARGET/dist" ]; then
     error "dist/ не скопіювався в $APP_TARGET!"
     exit 1
@@ -142,8 +140,7 @@ cd $APP_TARGET
 
 log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" > .env
-cat .env  # Показуємо що записали
-
+cat .env  
 log "Встановлення залежностей (Target)..."
 $PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей у цільовій папці."
@@ -153,7 +150,6 @@ rm -rf node_modules/.prisma 2>/dev/null || true
 rm -rf node_modules/@prisma/client 2>/dev/null || true
 
 log "Генерація Prisma Client (Target) з правильним DATABASE_URL..."
-# Генеруємо з явно вказаним DATABASE_URL і очищеним кешем
 DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate
 check_status "Не вдалося згенерувати Prisma Client у цільовій папці."
 
@@ -170,26 +166,20 @@ log "Активація системних служб..."
 if [ -d "$EXEC_DIR/../systemd" ]; then
     log "Зупинка старих служб і очищення..."
     
-    # ПОРЯДОК ВАЖЛИВИЙ: спочатку зупиняємо сервіс, потім сокет
     systemctl stop mywebapp.service 2>/dev/null || true
     systemctl stop mywebapp.socket 2>/dev/null || true
     
-    # Вбиваємо всі залишкові node процеси користувача app
     pkill -9 -u app node 2>/dev/null || true
     
-    # Перевіряємо чи порт 5200 ще зайнятий і звільняємо його
     if lsof -i :5200 >/dev/null 2>&1; then
         warn "Порт 5200 все ще зайнятий, вбиваємо процеси..."
         lsof -t -i :5200 | xargs -r kill -9 2>/dev/null || true
     fi
     
-    # Видаляємо Unix socket файл якщо існує (на всяк випадок)
     rm -f /run/mywebapp.sock 2>/dev/null || true
     
-    # Даємо час системі звільнити порт
-    sleep 2
+    sleep 3
     
-    # Скидаємо failed status
     systemctl reset-failed mywebapp.service 2>/dev/null || true
     systemctl reset-failed mywebapp.socket 2>/dev/null || true
     
@@ -206,7 +196,6 @@ if [ -d "$EXEC_DIR/../systemd" ]; then
     systemctl start mywebapp.service
     systemctl start mywebapp.service
     
-    # Чекаємо трохи і перевіряємо статус
     sleep 2
     if systemctl is-active --quiet mywebapp.service; then
         log "✓ mywebapp.service запущено успішно!"
@@ -235,11 +224,9 @@ echo -e "${GREEN}=== РОЗГОРТАННЯ ЗАВЕРШЕНО УСПІШНО! =
 log "Фінальна перевірка..."
 sleep 2
 
-# Перевірка чи app слухає на порту 5200
 if ss -tlnp | grep -q ":5200"; then
     log "✓ Додаток слухає на порту 5200"
     
-    # Тестуємо endpoint
     if curl -sf http://127.0.0.1:5200/health/alive &>/dev/null; then
         log "✓ Health endpoint відповідає!"
         echo -e "${GREEN}"
