@@ -35,7 +35,7 @@ echo -e "${GREEN}=== Початок розгортання mywebapp ===${NC}"
 
 log "Очищення цільової директорії $APP_TARGET..."
 mkdir -p $APP_TARGET
-rm -rf ${APP_TARGET:?}
+rm -rf ${APP_TARGET:?}/* 
 
 log "Встановлення системних пакетів..."
 apt-get update && apt-get install -y npm mariadb-server nginx curl sudo git ufw
@@ -88,6 +88,8 @@ mariadb -e "FLUSH PRIVILEGES;"
 
 log "Перехід до вихідного коду ($SOURCE_DIR) для підготовки..."
 cd "$EXEC_DIR/$SOURCE_DIR"
+BUILD_DIR=$(pwd)
+log "Робоча директорія для білду: $BUILD_DIR"
 
 log "Очищення попередніх збірок для чистого білду..."
 rm -rf dist node_modules
@@ -104,11 +106,27 @@ log "Збірка проєкту (Build)..."
 $PNPM_BIN run build
 check_status "Помилка під час збірки проєкту."
 
-log "Копіювання файлів..."
+# Перевірка чи dist створився
+if [ ! -d "dist" ]; then
+    error "dist/ не створився після білду! Перевіряємо структуру:"
+    ls -la
+    exit 1
+fi
+log "✓ dist/ успішно створений в $BUILD_DIR"
+
+log "Копіювання файлів з $BUILD_DIR в $APP_TARGET..."
 cp -r dist $APP_TARGET/
+check_status "Не вдалося скопіювати dist/"
 cp package.json $APP_TARGET/
 cp pnpm-lock.yaml $APP_TARGET/
 cp -r prisma $APP_TARGET/
+
+# Перевірка що файли скопіювались
+if [ ! -d "$APP_TARGET/dist" ]; then
+    error "dist/ не скопіювався в $APP_TARGET!"
+    exit 1
+fi
+log "✓ Файли успішно скопійовані в $APP_TARGET"
 
 log "Перехід до робочої директорії ($APP_TARGET)..."
 cd $APP_TARGET
@@ -117,7 +135,6 @@ log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
 
 log "Встановлення залежностей (Target)..."
-# НЕ використовуємо --prod, бо потрібен prisma CLI для генерації
 $PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей у цільовій папці."
 
