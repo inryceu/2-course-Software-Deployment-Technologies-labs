@@ -116,8 +116,9 @@ cd $APP_TARGET
 log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
 
-log "Встановлення production залежностей (Target)..."
-$PNPM_BIN install --prod
+log "Встановлення залежностей (Target)..."
+# НЕ використовуємо --prod, бо потрібен prisma CLI для генерації
+$PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей у цільовій папці."
 
 log "Генерація Prisma Client (Target) для робочого середовища..."
