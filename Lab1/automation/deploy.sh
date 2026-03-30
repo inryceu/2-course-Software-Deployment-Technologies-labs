@@ -154,7 +154,7 @@ rm -rf node_modules/@prisma/client 2>/dev/null || true
 
 log "Генерація Prisma Client (Target) з правильним DATABASE_URL..."
 # Генеруємо з явно вказаним DATABASE_URL і очищеним кешем
-DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate --force
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate
 check_status "Не вдалося згенерувати Prisma Client у цільовій папці."
 
 log "Синхронізація схеми БД..."
