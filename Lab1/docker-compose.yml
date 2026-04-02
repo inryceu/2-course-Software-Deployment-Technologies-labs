@@ -1,0 +1,73 @@
+services:
+  mariadb:
+    image: mariadb:11.6
+    container_name: lab2-mariadb
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://app:app_secure_pass@mariadb:3306/notes_db
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: notes_db
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app_secure_pass
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - lab2-network
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max-connections=100
+
+  mywebapp:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: lab2-mywebapp
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: mysql://app:app_secure_pass@mariadb:3306/notes_db
+      NODE_ENV: production
+      PORT: 5200
+    networks:
+      - lab2-network
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:5200/health/alive"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+
+  nginx:
+    build:
+      context: docker/nginx
+      dockerfile: Dockerfile
+    container_name: lab2-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    networks:
+      - lab2-network
+    depends_on:
+      mywebapp:
+        condition: service_healthy
+
+volumes:
+  mariadb_data:
+    name: lab2_mariadb_data
+
+networks:
+  lab2-network:
+    name: lab2-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
