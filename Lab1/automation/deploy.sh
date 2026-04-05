@@ -27,9 +27,15 @@ fi
 DB_NAME=$1
 DB_USER=$2
 DB_PASS=$3
-EXEC_DIR=$(pwd) 
+EXEC_DIR=$(pwd)
+APP_TARGET="/opt/mywebapp"
+SOURCE_DIR="../mywebapp"
 
 echo -e "${GREEN}=== Початок розгортання mywebapp ===${NC}"
+
+log "Очищення цільової директорії $APP_TARGET..."
+mkdir -p $APP_TARGET
+rm -rf ${APP_TARGET:?}/* 
 
 log "Встановлення системних пакетів..."
 apt-get update && apt-get install -y npm mariadb-server nginx curl sudo git ufw
@@ -52,7 +58,7 @@ create_user_safe() {
     if ! id "$1" &>/dev/null; then
         log "Створення користувача $1..."
         PASS_HASH=$(openssl passwd -6 "12345678")
-        useradd -m -s /bin/bash -c "$2" -p "$PASS_HASH" "$1"
+        useradd -m -s /bin/bash -g users -c "$2" -p "$PASS_HASH" "$1"
         chage -d 0 "$1"
     else
         warn "Користувач $1 вже існує."
@@ -76,14 +82,26 @@ systemctl enable mariadb || systemctl enable mysql
 
 mariadb -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
 mariadb -e "CREATE USER IF NOT EXISTS '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
+
+mariadb -e "ALTER USER '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASS';"
 mariadb -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'127.0.0.1';"
 mariadb -e "FLUSH PRIVILEGES;"
 
-APP_TARGET="/opt/mywebapp"
-SOURCE_DIR="../mywebapp"
+log "Перевірка підключення до БД..."
+if mariadb -u "$DB_USER" -p"$DB_PASS" -h 127.0.0.1 "$DB_NAME" -e "SELECT 1;" &>/dev/null; then
+    log "✓ Підключення до БД успішне!"
+else
+    error "Не вдалося підключитися до БД з credentials: $DB_USER:***@127.0.0.1:3306/$DB_NAME"
+    exit 1
+fi
 
 log "Перехід до вихідного коду ($SOURCE_DIR) для підготовки..."
 cd "$EXEC_DIR/$SOURCE_DIR"
+BUILD_DIR=$(pwd)
+log "Робоча директорія для білду: $BUILD_DIR"
+
+log "Очищення попередніх збірок для чистого білду..."
+rm -rf dist node_modules
 
 log "Встановлення залежностей (Source)..."
 $PNPM_BIN install --config.ignore-scripts=false
@@ -97,41 +115,94 @@ log "Збірка проєкту (Build)..."
 $PNPM_BIN run build
 check_status "Помилка під час збірки проєкту."
 
-log "Підготовка директорії $APP_TARGET..."
-mkdir -p $APP_TARGET
+if [ ! -d "dist" ]; then
+    error "dist/ не створився після білду! Перевіряємо структуру:"
+    ls -la
+    exit 1
+fi
+log "✓ dist/ успішно створений в $BUILD_DIR"
 
-log "Копіювання файлів..."
+log "Копіювання файлів з $BUILD_DIR в $APP_TARGET..."
 cp -r dist $APP_TARGET/
+check_status "Не вдалося скопіювати dist/"
 cp package.json $APP_TARGET/
 cp pnpm-lock.yaml $APP_TARGET/
 cp -r prisma $APP_TARGET/
+
+if [ ! -d "$APP_TARGET/dist" ]; then
+    error "dist/ не скопіювався в $APP_TARGET!"
+    exit 1
+fi
+log "✓ Файли успішно скопійовані в $APP_TARGET"
 
 log "Перехід до робочої директорії ($APP_TARGET)..."
 cd $APP_TARGET
 
 log "Налаштування .env для Prisma..."
-echo "DATABASE_URL=\"mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME\"" > .env
-
+echo "DATABASE_URL=mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" > .env
+cat .env  
 log "Встановлення залежностей (Target)..."
 $PNPM_BIN install --config.ignore-scripts=false
 check_status "Помилка встановлення залежностей у цільовій папці."
 
-log "Генерація Prisma Client (Target) для робочого середовища..."
-$PNPM_BIN exec prisma generate
+log "Очищення Prisma кешу..."
+rm -rf node_modules/.prisma 2>/dev/null || true
+rm -rf node_modules/@prisma/client 2>/dev/null || true
+
+log "Генерація Prisma Client (Target) з правильним DATABASE_URL..."
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma generate
 check_status "Не вдалося згенерувати Prisma Client у цільовій папці."
 
 log "Синхронізація схеми БД..."
-$PNPM_BIN exec prisma db push --accept-data-loss
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma db push --accept-data-loss
 check_status "Не вдалося синхронізувати схему БД."
+
+log "Тестування підключення Prisma..."
+DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma db execute --stdin <<< "SELECT 1;" &>/dev/null && log "✓ Prisma підключення працює!" || warn "Prisma підключення може мати проблеми"
 
 chown -R app:app $APP_TARGET
 
 log "Активація системних служб..."
 if [ -d "$EXEC_DIR/../systemd" ]; then
+    log "Зупинка старих служб і очищення..."
+    
+    systemctl stop mywebapp.service 2>/dev/null || true
+    systemctl stop mywebapp.socket 2>/dev/null || true
+    
+    pkill -9 -u app node 2>/dev/null || true
+    
+    if lsof -i :5200 >/dev/null 2>&1; then
+        warn "Порт 5200 все ще зайнятий, вбиваємо процеси..."
+        lsof -t -i :5200 | xargs -r kill -9 2>/dev/null || true
+    fi
+    
+    rm -f /run/mywebapp.sock 2>/dev/null || true
+    
+    sleep 3
+    
+    systemctl reset-failed mywebapp.service 2>/dev/null || true
+    systemctl reset-failed mywebapp.socket 2>/dev/null || true
+    
+    log "Копіювання systemd конфігів..."
     cp "$EXEC_DIR/../systemd/mywebapp.socket" /etc/systemd/system/
     cp "$EXEC_DIR/../systemd/mywebapp.service" /etc/systemd/system/
+    
+    log "Перезавантаження systemd daemon..."
     systemctl daemon-reload
-    systemctl enable --now mywebapp.socket
+    
+    log "Запуск служб..."
+    systemctl enable mywebapp.socket
+    systemctl start mywebapp.socket
+    systemctl start mywebapp.service
+    systemctl start mywebapp.service
+    
+    sleep 2
+    if systemctl is-active --quiet mywebapp.service; then
+        log "✓ mywebapp.service запущено успішно!"
+    else
+        warn "mywebapp.service не активний, перевіряємо логи..."
+        journalctl -u mywebapp.service -n 20 --no-pager
+    fi
 fi
 
 if [ -f "$EXEC_DIR/../nginx/mywebapp.conf" ]; then
@@ -149,3 +220,33 @@ echo "14840136" > /home/student/gradebook
 chown student:student /home/student/gradebook
 
 echo -e "${GREEN}=== РОЗГОРТАННЯ ЗАВЕРШЕНО УСПІШНО! ===${NC}"
+
+log "Фінальна перевірка..."
+sleep 2
+
+if ss -tlnp | grep -q ":5200"; then
+    log "✓ Додаток слухає на порту 5200"
+    
+    if curl -sf http://127.0.0.1:5200/health/alive &>/dev/null; then
+        log "✓ Health endpoint відповідає!"
+        echo -e "${GREEN}"
+        echo "╔════════════════════════════════════════╗"
+        echo "║   ✓ DEPLOYMENT УСПІШНИЙ!              ║"
+        echo "║                                        ║"
+        echo "║   Доступ:                              ║"
+        echo "║   • http://localhost/api/docs          ║"
+        echo "║   • http://localhost/notes             ║"
+        echo "╚════════════════════════════════════════╝"
+        echo -e "${NC}"
+    else
+        warn "Порт 5200 слухає, але health endpoint не відповідає"
+        warn "Перевір логи: sudo journalctl -u mywebapp.service -n 50"
+    fi
+else
+    error "Додаток НЕ слухає на порту 5200!"
+    error "Статус служби:"
+    systemctl status mywebapp.service --no-pager -l
+    error "Логи:"
+    journalctl -u mywebapp.service -n 30 --no-pager
+    exit 1
+fi

@@ -9,9 +9,12 @@ User=app
 WorkingDirectory=/opt/mywebapp
 
 EnvironmentFile=/opt/mywebapp/.env
+Environment=LISTEN_FDS=1
+Environment=LISTEN_PID=$MAINPID
 NonBlocking=true
+StandardInput=socket
 
-ExecStart=/usr/bin/node dist/main.js
+ExecStart=/usr/bin/node dist/src/main.js
 Restart=on-failure
 
 [Install]

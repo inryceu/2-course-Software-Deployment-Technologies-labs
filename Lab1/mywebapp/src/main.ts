@@ -17,7 +17,7 @@ async function bootstrap() {
     await app.getHttpServer().listen({ fd: 3 });
   } else {
     const port = 5200;
-    const host = '127.0.0.1';
+    const host = '0.0.0.0';
     console.log(`Starting via standard port binding (${host}:${port})`);
     await app.listen(port, host);
   }
