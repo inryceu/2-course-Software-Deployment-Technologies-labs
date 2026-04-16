@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import type { Server } from 'http';
 import { AppModule } from './app.module';
 import { setupSwagger } from './swagger.config';
 
@@ -14,7 +15,15 @@ async function bootstrap() {
   if (listenFds > 0) {
     console.log('Starting via Systemd Socket Activation (FD 3)');
     await app.init();
-    await app.getHttpServer().listen({ fd: 3 });
+    const httpServer = app.getHttpServer() as Server;
+    await new Promise<void>((resolve, reject) => {
+      const onError = (error: Error) => reject(error);
+      httpServer.once('error', onError);
+      httpServer.listen({ fd: 3 }, () => {
+        httpServer.off('error', onError);
+        resolve();
+      });
+    });
   } else {
     const port = 5200;
     const host = '0.0.0.0';
@@ -22,4 +31,4 @@ async function bootstrap() {
     await app.listen(port, host);
   }
 }
-bootstrap();
+void bootstrap();

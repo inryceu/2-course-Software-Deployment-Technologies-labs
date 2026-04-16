@@ -30,6 +30,8 @@ services:
       dockerfile: docker/Dockerfile
     container_name: lab2-mywebapp
     restart: unless-stopped
+    ports:
+      - "5200:5200"
     environment:
       DATABASE_URL: mysql://app:app_secure_pass@mariadb:3306/notes_db
       NODE_ENV: production

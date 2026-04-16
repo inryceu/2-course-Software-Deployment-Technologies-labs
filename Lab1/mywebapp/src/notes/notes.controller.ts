@@ -15,7 +15,6 @@ import {
   ApiFindAllNotes,
   ApiCreateNote,
   ApiFindOneNote,
-  CreateNoteDto,
 } from './notes.swagger';
 
 @ApiTags('notes')
@@ -67,7 +66,7 @@ export class NotesController {
         <tr><th>ID</th><td>${note.id}</td></tr>
         <tr><th>Title</th><td>${note.title}</td></tr>
         <tr><th>Content</th><td>${note.content}</td></tr>
-        <tr><th>Created At</th><td>${note.created_at}</td></tr>
+        <tr><th>Created At</th><td>${note.created_at.toISOString()}</td></tr>
       </table>`;
       return res.type('html').send(html);
     }
