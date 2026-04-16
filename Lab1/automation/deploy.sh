@@ -96,7 +96,7 @@ else
 fi
 
 log "Перехід до вихідного коду ($SOURCE_DIR) для підготовки..."
-cd "$EXEC_DIR/$SOURCE_DIR"
+cd "$EXEC_DIR/$SOURCE_DIR" || exit 1
 BUILD_DIR=$(pwd)
 log "Робоча директорія для білду: $BUILD_DIR"
 
@@ -136,7 +136,7 @@ fi
 log "✓ Файли успішно скопійовані в $APP_TARGET"
 
 log "Перехід до робочої директорії ($APP_TARGET)..."
-cd $APP_TARGET
+cd "$APP_TARGET" || exit 1
 
 log "Налаштування .env для Prisma..."
 echo "DATABASE_URL=mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" > .env
@@ -158,7 +158,12 @@ DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec 
 check_status "Не вдалося синхронізувати схему БД."
 
 log "Тестування підключення Prisma..."
-DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" $PNPM_BIN exec prisma db execute --stdin <<< "SELECT 1;" &>/dev/null && log "✓ Prisma підключення працює!" || warn "Prisma підключення може мати проблеми"
+if DATABASE_URL="mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME" \
+  $PNPM_BIN exec prisma db execute --stdin <<< "SELECT 1;" &>/dev/null; then
+    log "Prisma підключення працює!"
+else
+    warn "Prisma підключення може мати проблеми"
+fi
 
 chown -R app:app $APP_TARGET
 

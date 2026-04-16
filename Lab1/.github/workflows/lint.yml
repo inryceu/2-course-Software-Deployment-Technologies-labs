@@ -1,0 +1,65 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install app dependencies
+        run: pnpm --dir mywebapp install --frozen-lockfile
+
+      - name: ESLint (NestJS/TypeScript)
+        run: pnpm --dir mywebapp run lint:ci
+
+      - name: Hadolint (all Dockerfiles)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/Dockerfile
+          recursive: true
+
+      - name: Install shellcheck + yamllint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck yamllint
+
+      - name: Shellcheck (all shell scripts)
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f -name "*.sh")
+          if [ "${#files[@]}" -gt 0 ]; then
+            shellcheck "${files[@]}"
+          fi
+
+      - name: Yamllint (all YAML files)
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f \( -name "*.yml" -o -name "*.yaml" \))
+          if [ "${#files[@]}" -gt 0 ]; then
+            yamllint -c .yamllint.yml "${files[@]}"
+          fi
