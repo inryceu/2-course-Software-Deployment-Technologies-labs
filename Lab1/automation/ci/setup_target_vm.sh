@@ -30,8 +30,6 @@ chmod 755 /opt/lab3-notes
 
 log "Creating docker-compose.yml template..."
 tee /opt/lab3-notes/docker-compose.yml > /dev/null <<'COMPOSE_EOF'
-version: '3.8'
-
 services:
   mariadb:
     image: mariadb:11.6
