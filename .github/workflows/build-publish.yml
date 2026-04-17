@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: hashFiles('mywebapp/package.json') != ''
 
     steps:
@@ -37,7 +37,7 @@ jobs:
         run: pnpm --dir mywebapp run lint:ci
 
   test:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs: lint
     if: hashFiles('mywebapp/package.json') != ''
 
@@ -68,7 +68,7 @@ jobs:
         run: pnpm --dir mywebapp run test:cov -- --runInBand
 
   build_and_publish:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     needs:
       - lint
       - test
