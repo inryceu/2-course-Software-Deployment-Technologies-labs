@@ -32,15 +32,15 @@ jobs:
           version: 10
 
       - name: Install app dependencies
-        run: pnpm --dir mywebapp install --frozen-lockfile
+        run: pnpm --dir Lab1/mywebapp install --frozen-lockfile
 
       - name: ESLint (NestJS/TypeScript)
-        run: pnpm --dir mywebapp run lint:ci
+        run: pnpm --dir Lab1/mywebapp run lint:ci
 
       - name: Hadolint (all Dockerfiles)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: docker/Dockerfile
+          dockerfile: Lab1/docker/Dockerfile
           recursive: true
 
       - name: Install shellcheck + yamllint
