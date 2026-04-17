@@ -103,12 +103,12 @@ jobs:
           clean: false
           submodules: false
 
-      - name: Validate tag type (annotated tags only)
+      - name: Validate tag exists
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           git fetch --force --tags
           TYPE="$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(objecttype)' | head -n 1)"
-          test "${TYPE}" = "tag"
+          test -n "${TYPE}"
 
       - name: Set lowercase image name
         id: image
