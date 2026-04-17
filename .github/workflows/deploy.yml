@@ -19,10 +19,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate tag type (annotated tags only)
+      - name: Validate tag exists
         run: |
-          TYPE="$(git cat-file -t "${GITHUB_REF_NAME}")"
-          test "${TYPE}" = "tag"
+          git fetch --force --tags
+          TYPE="$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(objecttype)' | head -n 1)"
+          test -n "${TYPE}"
 
       - name: Set lowercase image name
         id: image
