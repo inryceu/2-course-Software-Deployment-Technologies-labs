@@ -42,6 +42,7 @@ jobs:
         with:
           dockerfile: Lab1/docker/Dockerfile
           recursive: true
+          failure-threshold: error
 
       - name: Install shellcheck + yamllint
         run: |
