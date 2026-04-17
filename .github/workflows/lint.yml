@@ -37,7 +37,14 @@ jobs:
       - name: ESLint (NestJS/TypeScript)
         run: pnpm --dir Lab1/mywebapp run lint:ci
 
-      - name: Install lint tooling
+      - name: Hadolint (all Dockerfiles)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Lab1/docker/Dockerfile
+          recursive: true
+          failure-threshold: error
+
+      - name: Install shellcheck + yamllint
         run: |
           set -euo pipefail
           sudo apt-get update
