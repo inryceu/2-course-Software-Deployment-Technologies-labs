@@ -68,5 +68,5 @@ jobs:
           set -euo pipefail
           mapfile -t files < <(find . -type f \( -name "*.yml" -o -name "*.yaml" \))
           if [ "${#files[@]}" -gt 0 ]; then
-            yamllint -c .yamllint.yml "${files[@]}"
+            yamllint -c Lab1/.yamllint.yml "${files[@]}"
           fi
