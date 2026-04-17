@@ -14,6 +14,15 @@ error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
 [ -z "${MYSQL_ROOT_PASSWORD:-}" ] && error "MYSQL_ROOT_PASSWORD is required (check GitHub Secrets)"
 [ -z "${MYSQL_PASSWORD:-}" ] && error "MYSQL_PASSWORD is required (check GitHub Secrets)"
 
+# Docker image repository must be lowercase. Keep tag/digest unchanged.
+if [[ "$APP_IMAGE" == */* ]]; then
+  IMAGE_REGISTRY="${APP_IMAGE%%/*}"
+  IMAGE_PATH_AND_REF="${APP_IMAGE#*/}"
+  IMAGE_PATH="${IMAGE_PATH_AND_REF%%[:@]*}"
+  IMAGE_REF_SUFFIX="${IMAGE_PATH_AND_REF#"$IMAGE_PATH"}"
+  APP_IMAGE="${IMAGE_REGISTRY}/$(printf '%s' "$IMAGE_PATH" | tr '[:upper:]' '[:lower:]')${IMAGE_REF_SUFFIX}"
+fi
+
 SSH_PORT="${TARGET_PORT:-22}"
 TARGET_DIR="${TARGET_DIR:-/opt/lab3-notes}"
 KNOWN_HOSTS_VALUE="${SSH_KNOWN_HOSTS:-}"
