@@ -15,14 +15,11 @@ permissions:
 
 jobs:
   lint:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          clean: false
-          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -40,12 +37,14 @@ jobs:
       - name: ESLint (NestJS/TypeScript)
         run: pnpm --dir Lab1/mywebapp run lint:ci
 
-      - name: Validate lint tooling on runner
+      - name: Install lint tooling
         run: |
           set -euo pipefail
-          command -v hadolint >/dev/null
-          command -v shellcheck >/dev/null
-          command -v yamllint >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y shellcheck yamllint curl
+          HADOLINT_VERSION="v2.12.0"
+          curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint
+          sudo install -m 0755 /tmp/hadolint /usr/local/bin/hadolint
 
       - name: Hadolint (all Dockerfiles)
         run: |
@@ -58,7 +57,7 @@ jobs:
       - name: Shellcheck (all shell scripts)
         run: |
           set -euo pipefail
-          mapfile -t files < <(find . -type f -name "*.sh")
+          mapfile -t files < <(git ls-files "*.sh")
           if [ "${#files[@]}" -gt 0 ]; then
             shellcheck "${files[@]}"
           fi
@@ -66,7 +65,7 @@ jobs:
       - name: Yamllint (all YAML files)
         run: |
           set -euo pipefail
-          mapfile -t files < <(find . -type f \( -name "*.yml" -o -name "*.yaml" \))
+          mapfile -t files < <(git ls-files "*.yml" "*.yaml")
           if [ "${#files[@]}" -gt 0 ]; then
             yamllint -c Lab1/.yamllint.yml "${files[@]}"
           fi
