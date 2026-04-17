@@ -1,0 +1,47 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64, lab3-deployer]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag type (annotated tags only)
+        run: |
+          TYPE="$(git cat-file -t "${GITHUB_REF_NAME}")"
+          test "${TYPE}" = "tag"
+
+      - name: Deploy to target VM via SSH
+        env:
+          TARGET_HOST: ${{ secrets.TARGET_HOST }}
+          TARGET_USER: ${{ secrets.TARGET_USER }}
+          TARGET_PORT: ${{ secrets.TARGET_PORT }}
+          TARGET_DIR: ${{ secrets.TARGET_DIR }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          GHCR_USER: ${{ secrets.GHCR_USER }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          APP_IMAGE: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
+          MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
+        run: bash automation/ci/deploy_via_ssh.sh
+
+      - name: Verify deployment
+        env:
+          TARGET_HOST: ${{ secrets.VERIFY_HOST }}
+          TARGET_HTTP_PORT: ${{ secrets.VERIFY_PORT }}
+          VERIFY_MAX_WAIT_SECONDS: 180
+        run: bash automation/ci/verify_deployment.sh
