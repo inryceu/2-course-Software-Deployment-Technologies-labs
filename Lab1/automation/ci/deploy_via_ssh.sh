@@ -46,4 +46,16 @@ ssh -i "$KEY_FILE" -p "$SSH_PORT" "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_
   "sudo docker login ghcr.io -u '${GHCR_USER:-${GITHUB_ACTOR:-github-actions}}' -p '${GHCR_TOKEN:-${GITHUB_TOKEN:-}}'"
 
 ssh -i "$KEY_FILE" -p "$SSH_PORT" "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
-  "cd '$TARGET_DIR' && sudo docker compose pull && sudo systemctl daemon-reload && sudo systemctl enable lab3-notes && sudo systemctl restart lab3-notes"
+  "cd '$TARGET_DIR' && \
+   for i in \$(seq 1 18); do \
+     if sudo docker compose pull; then \
+       break; \
+     fi; \
+     if [ \"\$i\" -eq 18 ]; then \
+       exit 1; \
+     fi; \
+     sleep 10; \
+   done && \
+   sudo systemctl daemon-reload && \
+   sudo systemctl enable lab3-notes && \
+   sudo systemctl restart lab3-notes"
