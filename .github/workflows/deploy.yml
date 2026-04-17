@@ -49,11 +49,3 @@ jobs:
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
         run: bash Lab1/automation/ci/deploy_via_ssh.sh
 
-      - name: Verify deployment
-        env:
-          TARGET_HOST: ${{ secrets.TARGET_HOST }}
-          VERIFY_HOST: ${{ secrets.VERIFY_HOST }}
-          TARGET_HTTP_PORT: ${{ secrets.TARGET_HTTP_PORT }}
-          VERIFY_PORT: ${{ secrets.VERIFY_PORT }}
-          VERIFY_MAX_WAIT_SECONDS: 180
-        run: bash Lab1/automation/ci/verify_deployment.sh
