@@ -85,17 +85,39 @@ ssh -i "$KEY_FILE" -p "$SSH_PORT" -o BatchMode=yes -o IdentitiesOnly=yes "${SSH_
 
 # shellcheck disable=SC2029
 ssh -i "$KEY_FILE" -p "$SSH_PORT" -o BatchMode=yes -o IdentitiesOnly=yes "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
-  "cd '$TARGET_DIR' && \
-   sudo -n docker compose --env-file '$TARGET_DIR/.env' -f '$TARGET_DIR/docker-compose.yml' config > /dev/null && \
-   for i in \$(seq 1 ${MAX_PULL_RETRIES}); do \
-      if sudo -n docker compose pull; then \
-        break; \
-     fi; \
-     if [ \"\$i\" -eq ${MAX_PULL_RETRIES} ]; then \
-       exit 1; \
-     fi; \
-     sleep 10; \
-   done && \
-   sudo -n systemctl daemon-reload && \
-   sudo -n systemctl enable lab3-notes && \
-   sudo -n systemctl restart lab3-notes"
+  "set -euo pipefail
+TARGET_DIR='$TARGET_DIR'
+MAX_PULL_RETRIES='${MAX_PULL_RETRIES}'
+
+show_diagnostics() {
+  echo '----- lab3-notes.service status -----' >&2
+  sudo -n systemctl status lab3-notes --no-pager -l || true
+  echo '----- lab3-notes journal (last 120 lines) -----' >&2
+  sudo -n journalctl -u lab3-notes --no-pager -n 120 || true
+  echo '----- docker compose ps -----' >&2
+  sudo -n docker compose --env-file \"\$TARGET_DIR/.env\" -f \"\$TARGET_DIR/docker-compose.yml\" ps || true
+  echo '----- docker compose logs (last 120 lines) -----' >&2
+  sudo -n docker compose --env-file \"\$TARGET_DIR/.env\" -f \"\$TARGET_DIR/docker-compose.yml\" logs --tail 120 || true
+}
+
+cd \"\$TARGET_DIR\"
+sudo -n docker compose --env-file \"\$TARGET_DIR/.env\" -f \"\$TARGET_DIR/docker-compose.yml\" config > /dev/null
+
+for i in \$(seq 1 \"\$MAX_PULL_RETRIES\"); do
+  if sudo -n docker compose --env-file \"\$TARGET_DIR/.env\" -f \"\$TARGET_DIR/docker-compose.yml\" pull; then
+    break
+  fi
+  if [ \"\$i\" -eq \"\$MAX_PULL_RETRIES\" ]; then
+    echo \"docker compose pull failed after \$MAX_PULL_RETRIES attempts\" >&2
+    show_diagnostics
+    exit 1
+  fi
+  sleep 10
+done
+
+sudo -n systemctl daemon-reload
+sudo -n systemctl enable lab3-notes
+if ! sudo -n systemctl restart lab3-notes; then
+  show_diagnostics
+  exit 1
+fi"
