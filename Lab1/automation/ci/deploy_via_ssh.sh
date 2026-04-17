@@ -2,12 +2,20 @@
 
 set -euo pipefail
 
-: "${TARGET_HOST:?TARGET_HOST is required}"
-: "${TARGET_USER:?TARGET_USER is required}"
-: "${SSH_PRIVATE_KEY:?SSH_PRIVATE_KEY is required}"
-: "${APP_IMAGE:?APP_IMAGE is required}"
-: "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"
-: "${MYSQL_PASSWORD:?MYSQL_PASSWORD is required}"
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
+warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+
+[ -z "${TARGET_HOST:-}" ] && error "TARGET_HOST is required (check GitHub Secrets)"
+[ -z "${TARGET_USER:-}" ] && error "TARGET_USER is required (check GitHub Secrets)"
+[ -z "${SSH_PRIVATE_KEY:-}" ] && error "SSH_PRIVATE_KEY is required (check GitHub Secrets)"
+[ -z "${APP_IMAGE:-}" ] && error "APP_IMAGE is required"
+[ -z "${MYSQL_ROOT_PASSWORD:-}" ] && error "MYSQL_ROOT_PASSWORD is required (check GitHub Secrets)"
+[ -z "${MYSQL_PASSWORD:-}" ] && error "MYSQL_PASSWORD is required (check GitHub Secrets)"
 
 SSH_PORT="${TARGET_PORT:-22}"
 TARGET_DIR="${TARGET_DIR:-/opt/lab3-notes}"
