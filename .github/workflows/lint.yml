@@ -64,7 +64,7 @@ jobs:
       - name: Yamllint (all YAML files)
         run: |
           set -euo pipefail
-          mapfile -t files < <(git ls-files "*.yml" "*.yaml")
+          mapfile -t files < <(git ls-files "*.yml" "*.yaml" | grep -Ev '(^|/)pnpm-lock\.yaml$' || true)
           if [ "${#files[@]}" -gt 0 ]; then
             yamllint -c Lab1/.yamllint.yml "${files[@]}"
           fi

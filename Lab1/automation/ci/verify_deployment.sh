@@ -13,10 +13,16 @@ SLEEP_SECONDS=5
 
 request_code() {
   local path="$1"
-  curl -s -o /dev/null -w "%{http_code}" \
+  local code
+  code="$(curl -s -o /dev/null -w "%{http_code}" \
     --connect-timeout 2 \
     --max-time 5 \
-    "$BASE_URL$path" || echo "000"
+    "$BASE_URL$path" || true)"
+  if [ -z "$code" ] || [ "$code" = "000" ]; then
+    echo "000"
+    return
+  fi
+  echo "$code"
 }
 
 wait_for_http_200() {
@@ -34,10 +40,16 @@ wait_for_http_200() {
 }
 
 if ! wait_for_http_200 "/notes"; then
+  NOTES_CODE="$(request_code "/notes")"
+  ALIVE_CODE="$(request_code "/health/alive")"
+  READY_CODE="$(request_code "/health/ready")"
   echo "Verification failed: ${BASE_URL}/notes did not return HTTP 200 within ${MAX_WAIT_SECONDS}s" >&2
-  echo "Last status for ${BASE_URL}/notes: $(request_code "/notes")" >&2
-  echo "Last status for ${BASE_URL}/health/alive: $(request_code "/health/alive")" >&2
-  echo "Last status for ${BASE_URL}/health/ready: $(request_code "/health/ready")" >&2
+  echo "Last status for ${BASE_URL}/notes: ${NOTES_CODE}" >&2
+  echo "Last status for ${BASE_URL}/health/alive: ${ALIVE_CODE}" >&2
+  echo "Last status for ${BASE_URL}/health/ready: ${READY_CODE}" >&2
+  if [ "$NOTES_CODE" = "000" ] && [ "$ALIVE_CODE" = "000" ] && [ "$READY_CODE" = "000" ]; then
+    echo "Connection failure: runner cannot reach ${TARGET_HOST}:${TARGET_PORT} (wrong host/port, service down, or firewall)." >&2
+  fi
   exit 1
 fi
 
