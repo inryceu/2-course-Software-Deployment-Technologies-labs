@@ -27,10 +27,19 @@ jobs:
           TYPE="$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(objecttype)' | head -n 1)"
           test -n "${TYPE}"
 
+<<<<<<< HEAD
       - name: Compute lowercase image name
         id: image
         run: |
           echo "value=ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+=======
+      - name: Set lowercase image name
+        id: image
+        shell: bash
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}:${GITHUB_REF_NAME}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+>>>>>>> 3cdf3d6b448bee5e2651c74b50b8458ec76698f4
 
       - name: Deploy to target VM via SSH
         env:
@@ -42,7 +51,11 @@ jobs:
           SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
           GHCR_USER: ${{ secrets.GHCR_USER }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+<<<<<<< HEAD
           APP_IMAGE: ${{ steps.image.outputs.value }}
+=======
+          APP_IMAGE: ${{ steps.image.outputs.image }}
+>>>>>>> 3cdf3d6b448bee5e2651c74b50b8458ec76698f4
           MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
           MYSQL_PASSWORD: ${{ secrets.MYSQL_PASSWORD }}
         run: bash Lab1/automation/ci/deploy_via_ssh.sh

@@ -50,7 +50,27 @@ if [[ "$KEY_VALUE" != *"-----BEGIN"* ]]; then
 fi
 
 printf '%s\n' "$KEY_VALUE" > "$KEY_FILE"
+# Normalize SSH key from GitHub Secrets:
+# - supports raw multiline key
+# - supports literal "\n" escaped format
+# - supports base64-encoded key
+KEY_VALUE="${SSH_PRIVATE_KEY//$'\r'/}"
+if [[ "$KEY_VALUE" == *"\\n"* ]]; then
+  KEY_VALUE="$(printf '%s' "$KEY_VALUE" | sed 's/\\n/\n/g')"
+fi
+
+if [[ "$KEY_VALUE" != *"-----BEGIN"* ]]; then
+  if DECODED_KEY="$(printf '%s' "$KEY_VALUE" | base64 -d 2>/dev/null)"; then
+    KEY_VALUE="$DECODED_KEY"
+  fi
+fi
+
+printf '%s\n' "$KEY_VALUE" > "$KEY_FILE"
 chmod 600 "$KEY_FILE"
+
+if ! ssh-keygen -y -f "$KEY_FILE" > /dev/null 2>&1; then
+  error "SSH_PRIVATE_KEY is invalid, encrypted, or malformed. Store an unencrypted OpenSSH private key in the secret."
+fi
 
 if ! ssh-keygen -y -f "$KEY_FILE" > /dev/null 2>&1; then
   error "SSH_PRIVATE_KEY is invalid, encrypted, or malformed. Store an unencrypted OpenSSH private key in the secret."
@@ -79,6 +99,8 @@ APP_IMAGE=$APP_IMAGE
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 MYSQL_PASSWORD=$MYSQL_PASSWORD
 EOF
+sudo -n mv /tmp/lab3-env '$TARGET_DIR/.env'
+sudo -n chmod 600 '$TARGET_DIR/.env'"
 sudo -n mv /tmp/lab3-env '$TARGET_DIR/.env'
 sudo -n chmod 600 '$TARGET_DIR/.env'"
 
