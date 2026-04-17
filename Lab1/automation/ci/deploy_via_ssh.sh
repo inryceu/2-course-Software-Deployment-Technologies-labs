@@ -3,12 +3,9 @@
 set -euo pipefail
 
 RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 NC='\033[0m'
 
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; exit 1; }
-warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 
 [ -z "${TARGET_HOST:-}" ] && error "TARGET_HOST is required (check GitHub Secrets)"
 [ -z "${TARGET_USER:-}" ] && error "TARGET_USER is required (check GitHub Secrets)"
@@ -28,8 +25,27 @@ cleanup() {
 }
 trap cleanup EXIT
 
-printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
+# Normalize SSH key from GitHub Secrets:
+# - supports raw multiline key
+# - supports literal "\n" escaped format
+# - supports base64-encoded key
+KEY_VALUE="${SSH_PRIVATE_KEY//$'\r'/}"
+if [[ "$KEY_VALUE" == *"\\n"* ]]; then
+  KEY_VALUE="$(printf '%s' "$KEY_VALUE" | sed 's/\\n/\n/g')"
+fi
+
+if [[ "$KEY_VALUE" != *"-----BEGIN"* ]]; then
+  if DECODED_KEY="$(printf '%s' "$KEY_VALUE" | base64 -d 2>/dev/null)"; then
+    KEY_VALUE="$DECODED_KEY"
+  fi
+fi
+
+printf '%s\n' "$KEY_VALUE" > "$KEY_FILE"
 chmod 600 "$KEY_FILE"
+
+if ! ssh-keygen -y -f "$KEY_FILE" > /dev/null 2>&1; then
+  error "SSH_PRIVATE_KEY is invalid, encrypted, or malformed. Store an unencrypted OpenSSH private key in the secret."
+fi
 
 if [ -n "$KNOWN_HOSTS_VALUE" ]; then
   printf '%s\n' "$KNOWN_HOSTS_VALUE" > "$KNOWN_HOSTS_FILE"
@@ -38,20 +54,29 @@ else
   SSH_STRICT_OPTS=(-o StrictHostKeyChecking=no)
 fi
 
-ssh -i "$KEY_FILE" -p "$SSH_PORT" "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
-  "sudo mkdir -p '$TARGET_DIR'"
+SSH_BASE_OPTS=(-i "$KEY_FILE" -p "$SSH_PORT" -o BatchMode=yes -o IdentitiesOnly=yes "${SSH_STRICT_OPTS[@]}")
 
-ssh -i "$KEY_FILE" -p "$SSH_PORT" "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
+ssh "${SSH_BASE_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" "sudo -n true" || \
+  error "Target user '$TARGET_USER' must have passwordless sudo (NOPASSWD) on $TARGET_HOST"
+
+# shellcheck disable=SC2029
+ssh "${SSH_BASE_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
+  "sudo -n mkdir -p '$TARGET_DIR'"
+
+# shellcheck disable=SC2029
+ssh "${SSH_BASE_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
   "cat > /tmp/lab3-env <<'EOF'
 APP_IMAGE=$APP_IMAGE
 MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD
 MYSQL_PASSWORD=$MYSQL_PASSWORD
 EOF
-sudo mv /tmp/lab3-env '$TARGET_DIR/.env'
-sudo chmod 600 '$TARGET_DIR/.env'"
+sudo -n mv /tmp/lab3-env '$TARGET_DIR/.env'
+sudo -n chmod 600 '$TARGET_DIR/.env'"
 
-ssh -i "$KEY_FILE" -p "$SSH_PORT" "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
-  "sudo docker login ghcr.io -u '${GHCR_USER:-${GITHUB_ACTOR:-github-actions}}' -p '${GHCR_TOKEN:-${GITHUB_TOKEN:-}}'"
+# shellcheck disable=SC2029
+ssh "${SSH_BASE_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
+  "sudo -n docker login ghcr.io -u '${GHCR_USER:-${GITHUB_ACTOR:-github-actions}}' -p '${GHCR_TOKEN:-${GITHUB_TOKEN:-}}'"
 
-ssh -i "$KEY_FILE" -p "$SSH_PORT" "${SSH_STRICT_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
-  "cd '$TARGET_DIR' && sudo docker compose pull && sudo systemctl daemon-reload && sudo systemctl enable lab3-notes && sudo systemctl restart lab3-notes"
+# shellcheck disable=SC2029
+ssh "${SSH_BASE_OPTS[@]}" "$TARGET_USER@$TARGET_HOST" \
+  "cd '$TARGET_DIR' && sudo -n docker compose pull && sudo -n systemctl daemon-reload && sudo -n systemctl enable lab3-notes && sudo -n systemctl restart lab3-notes"

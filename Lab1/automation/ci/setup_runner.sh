@@ -39,7 +39,10 @@ apt-get install -y \
     libffi-dev \
     python3 \
     python3-pip \
-    docker.io
+    docker.io \
+    shellcheck \
+    yamllint \
+    sudo
 
 log "Creating runner user..."
 if ! id "$RUNNER_USER" &>/dev/null; then
@@ -51,6 +54,12 @@ fi
 
 log "Adding runner user to docker group..."
 usermod -aG docker "$RUNNER_USER"
+
+log "Configuring passwordless sudo for runner user..."
+cat > "/etc/sudoers.d/${RUNNER_USER}" <<EOF
+${RUNNER_USER} ALL=(ALL) NOPASSWD:ALL
+EOF
+chmod 440 "/etc/sudoers.d/${RUNNER_USER}"
 
 log "Creating runner directory..."
 mkdir -p "$RUNNER_DIR"
@@ -67,6 +76,11 @@ tar xzf runner.tar.gz
 rm runner.tar.gz
 
 chown -R "$RUNNER_USER:$RUNNER_USER" "$RUNNER_DIR"
+
+log "Installing hadolint binary..."
+HADOLINT_VERSION="v2.12.0"
+curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /usr/local/bin/hadolint
+chmod 755 /usr/local/bin/hadolint
 
 log "Generating registration token from GitHub API..."
 REGISTRATION_TOKEN=$(curl -s -X POST \

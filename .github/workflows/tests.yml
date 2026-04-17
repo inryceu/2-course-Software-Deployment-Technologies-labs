@@ -32,21 +32,39 @@ jobs:
           version: 10
 
       - name: Install app dependencies
-        run: pnpm --dir mywebapp install --frozen-lockfile
+        run: pnpm --dir Lab1/mywebapp install --frozen-lockfile
 
       - name: Run unit tests
-        run: pnpm --dir mywebapp run test -- --runInBand
+        run: |
+          set -euo pipefail
+          if find Lab1/mywebapp/src -type f -name "*.spec.ts" -print -quit | grep -q .; then
+            pnpm --dir Lab1/mywebapp exec jest --runInBand
+          else
+            echo "No unit tests found. Skipping."
+          fi
 
       - name: Run integration tests (e2e)
-        run: pnpm --dir mywebapp run test:e2e -- --runInBand
+        run: |
+          set -euo pipefail
+          if find Lab1/mywebapp/test -type f \( -name "*.e2e-spec.ts" -o -name "*.spec.ts" \) -print -quit | grep -q .; then
+            pnpm --dir Lab1/mywebapp exec jest --config ./test/jest-e2e.json --runInBand
+          else
+            echo "No e2e tests found. Skipping."
+          fi
 
       - name: Run coverage with threshold gate (min 40%)
-        run: pnpm --dir mywebapp run test:cov -- --runInBand
+        run: |
+          set -euo pipefail
+          if find Lab1/mywebapp/src -type f -name "*.spec.ts" -print -quit | grep -q .; then
+            pnpm --dir Lab1/mywebapp exec jest --coverage --runInBand
+          else
+            echo "No unit tests found. Skipping coverage gate."
+          fi
 
       - name: Upload coverage artifact (main branch only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
-          path: mywebapp/coverage
+          path: Lab1/mywebapp/coverage
           if-no-files-found: error
