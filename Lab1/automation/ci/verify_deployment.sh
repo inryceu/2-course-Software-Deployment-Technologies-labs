@@ -11,7 +11,7 @@ SLEEP_SECONDS=5
 
 request_code() {
   local path="$1"
-  curl -sS -o /dev/null -w "%{http_code}" "$BASE_URL$path"
+  curl -sS --connect-timeout 3 --max-time 5 -o /dev/null -w "%{http_code}" "$BASE_URL$path" || echo "000"
 }
 
 wait_for_http_200() {
@@ -29,7 +29,8 @@ wait_for_http_200() {
 }
 
 if ! wait_for_http_200 "/notes"; then
-  echo "Verification failed: /notes did not return HTTP 200 within ${MAX_WAIT_SECONDS}s" >&2
+  echo "Verification failed: ${BASE_URL}/notes did not return HTTP 200 within ${MAX_WAIT_SECONDS}s" >&2
+  echo "Last /notes status: $(request_code "/notes")" >&2
   exit 1
 fi
 

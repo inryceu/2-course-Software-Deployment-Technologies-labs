@@ -49,7 +49,7 @@ jobs:
 
       - name: Verify deployment
         env:
-          TARGET_HOST: ${{ secrets.VERIFY_HOST }}
+          TARGET_HOST: ${{ secrets.TARGET_HOST }}
           TARGET_HTTP_PORT: ${{ secrets.VERIFY_PORT }}
           VERIFY_MAX_WAIT_SECONDS: 180
         run: bash Lab1/automation/ci/verify_deployment.sh
