@@ -1,0 +1,6 @@
+[submodule "Lab2/deploy.lab-containers-starter-project-golang"]
+	path = Lab2/deploy.lab-containers-starter-project-golang
+	url = https://github.com/inryceu/deploy.lab-containers-starter-project-golang.git
+[submodule "Lab2/deploy.lab-containers-starter-project-python"]
+	path = Lab2/deploy.lab-containers-starter-project-python
+	url = https://github.com/inryceu/deploy.lab-containers-starter-project-python.git

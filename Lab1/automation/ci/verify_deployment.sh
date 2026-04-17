@@ -2,16 +2,21 @@
 
 set -euo pipefail
 
-: "${TARGET_HOST:?TARGET_HOST is required}"
+# Prefer explicit verify target when provided, otherwise verify the deployed host.
+TARGET_HOST="${VERIFY_HOST:-${TARGET_HOST:-}}"
+: "${TARGET_HOST:?TARGET_HOST or VERIFY_HOST is required}"
 
-TARGET_PORT="${TARGET_HTTP_PORT:-80}"
+TARGET_PORT="${VERIFY_PORT:-${TARGET_HTTP_PORT:-80}}"
 BASE_URL="http://${TARGET_HOST}:${TARGET_PORT}"
 MAX_WAIT_SECONDS="${VERIFY_MAX_WAIT_SECONDS:-120}"
 SLEEP_SECONDS=5
 
 request_code() {
   local path="$1"
-  curl -sS --connect-timeout 3 --max-time 5 -o /dev/null -w "%{http_code}" "$BASE_URL$path" || echo "000"
+  curl -s -o /dev/null -w "%{http_code}" \
+    --connect-timeout 2 \
+    --max-time 5 \
+    "$BASE_URL$path" || echo "000"
 }
 
 wait_for_http_200() {
@@ -30,7 +35,9 @@ wait_for_http_200() {
 
 if ! wait_for_http_200 "/notes"; then
   echo "Verification failed: ${BASE_URL}/notes did not return HTTP 200 within ${MAX_WAIT_SECONDS}s" >&2
-  echo "Last /notes status: $(request_code "/notes")" >&2
+  echo "Last status for ${BASE_URL}/notes: $(request_code "/notes")" >&2
+  echo "Last status for ${BASE_URL}/health/alive: $(request_code "/health/alive")" >&2
+  echo "Last status for ${BASE_URL}/health/ready: $(request_code "/health/ready")" >&2
   exit 1
 fi
 

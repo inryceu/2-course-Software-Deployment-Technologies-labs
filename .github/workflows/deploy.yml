@@ -18,6 +18,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          clean: false
+          submodules: false
 
       - name: Validate tag exists
         run: |
@@ -50,6 +52,8 @@ jobs:
       - name: Verify deployment
         env:
           TARGET_HOST: ${{ secrets.TARGET_HOST }}
-          TARGET_HTTP_PORT: ${{ secrets.VERIFY_PORT }}
+          VERIFY_HOST: ${{ secrets.VERIFY_HOST }}
+          TARGET_HTTP_PORT: ${{ secrets.TARGET_HTTP_PORT }}
+          VERIFY_PORT: ${{ secrets.VERIFY_PORT }}
           VERIFY_MAX_WAIT_SECONDS: 180
         run: bash Lab1/automation/ci/verify_deployment.sh

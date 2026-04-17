@@ -168,13 +168,13 @@ if cd Lab1/mywebapp 2>/dev/null; then
   else
     check_fail "ESLint fails locally (run: cd Lab1/mywebapp && pnpm run lint:ci)"
   fi
-  
+
   if npm run lint:shell > /dev/null 2>&1; then
     check_pass "Shellcheck passes locally"
   else
     check_fail "Shellcheck fails locally (run: npm run lint:shell)"
   fi
-  
+
   if npm run lint:yaml > /dev/null 2>&1; then
     check_pass "Yamllint passes locally"
   else

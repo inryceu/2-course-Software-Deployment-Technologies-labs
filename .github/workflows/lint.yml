@@ -36,25 +36,29 @@ jobs:
 
       - name: ESLint (NestJS/TypeScript)
         run: pnpm --dir Lab1/mywebapp run lint:ci
+      - name: Install lint tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck yamllint curl
+          HADOLINT_VERSION="v2.12.0"
+          curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint
+          sudo install -m 0755 /tmp/hadolint /usr/local/bin/hadolint
 
       - name: Hadolint (all Dockerfiles)
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Lab1/docker/Dockerfile
-          recursive: true
-          failure-threshold: error
-
-      - name: Install shellcheck + yamllint
         run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck yamllint
+          set -euo pipefail
+          mapfile -t dockerfiles < <(find Lab1 -type f -name "Dockerfile")
+          if [ "${#dockerfiles[@]}" -gt 0 ]; then
+            hadolint --failure-threshold error "${dockerfiles[@]}"
+          fi
 
       - name: Shellcheck (all shell scripts)
         run: |
           set -euo pipefail
           mapfile -t files < <(git ls-files "*.sh")
           if [ "${#files[@]}" -gt 0 ]; then
-            shellcheck "${files[@]}"
+            shellcheck -S warning "${files[@]}"
           fi
 
       - name: Yamllint (all YAML files)

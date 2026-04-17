@@ -15,7 +15,18 @@ log "Setting up target VM for Lab3 deployments..."
 
 log "Installing Docker..."
 apt-get update
-apt-get install -y docker.io docker-compose-plugin
+
+apt-get install -y docker.io
+
+if ! apt-get install -y docker-compose-plugin 2>/dev/null; then
+  log "docker-compose-plugin not found in default repos, installing from Docker repo..."
+  mkdir -p /etc/apt/keyrings
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+    tee /etc/apt/sources.list.d/docker.list > /dev/null
+  apt-get update
+  apt-get install -y docker-compose-plugin
+fi
 
 log "Enabling Docker service..."
 systemctl enable docker
