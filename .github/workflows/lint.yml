@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          clean: false
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -37,16 +40,22 @@ jobs:
       - name: ESLint (NestJS/TypeScript)
         run: pnpm --dir Lab1/mywebapp run lint:ci
 
-      - name: Hadolint (all Dockerfiles)
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: Lab1/docker/Dockerfile
-          recursive: true
-
-      - name: Install shellcheck + yamllint
+      - name: Install hadolint + shellcheck + yamllint
         run: |
           sudo apt-get update
-          sudo apt-get install -y shellcheck yamllint
+          sudo apt-get install -y shellcheck yamllint curl
+          HADOLINT_VERSION="v2.12.0"
+          curl -fsSL "https://github.com/hadolint/hadolint/releases/download/${HADOLINT_VERSION}/hadolint-Linux-x86_64" -o /tmp/hadolint
+          sudo install -m 0755 /tmp/hadolint /usr/local/bin/hadolint
+          hadolint --version
+
+      - name: Hadolint (all Dockerfiles)
+        run: |
+          set -euo pipefail
+          mapfile -t dockerfiles < <(find Lab1 -type f -name "Dockerfile")
+          if [ "${#dockerfiles[@]}" -gt 0 ]; then
+            hadolint "${dockerfiles[@]}"
+          fi
 
       - name: Shellcheck (all shell scripts)
         run: |

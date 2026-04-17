@@ -18,10 +18,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          clean: false
+          submodules: false
 
       - name: Validate tag type (annotated tags only)
         run: |
-          TYPE="$(git cat-file -t "${GITHUB_REF_NAME}")"
+          git fetch --force --tags
+          TYPE="$(git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(objecttype)' | head -n 1)"
           test "${TYPE}" = "tag"
 
       - name: Deploy to target VM via SSH
