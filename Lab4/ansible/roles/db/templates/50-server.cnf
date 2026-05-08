@@ -1,5 +1,5 @@
 [mysqld]
-bind-address = {{ ansible_default_ipv4.address }}
+bind-address = {{ mariadb_bind_address }}
 port = {{ db_port }}
 
 character-set-server = utf8mb4

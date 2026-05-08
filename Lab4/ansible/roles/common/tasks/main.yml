@@ -14,12 +14,6 @@
     password: "{{ teacher_password_plain | password_hash('sha512', 'lab4teacher') }}"
     state: present
 
-- name: Enable UFW with deny-by-default incoming policy
-  community.general.ufw:
-    state: enabled
-    policy: deny
-    direction: incoming
-
 - name: Allow SSH through firewall
   community.general.ufw:
     rule: allow
@@ -40,3 +34,9 @@
     proto: tcp
     src: "{{ hostvars[groups['workers'][0]].ansible_host | default(hostvars[groups['workers'][0]].ansible_default_ipv4.address) }}"
   when: "'db' in group_names"
+
+- name: Enable UFW with deny-by-default incoming policy
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming

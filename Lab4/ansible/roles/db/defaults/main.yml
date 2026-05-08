@@ -9,3 +9,4 @@ db_password: app_secure_pass
 db_port: 3306
 
 mariadb_config_path: /etc/mysql/mariadb.conf.d/50-server.cnf
+mariadb_bind_address: "{{ ansible_host | default(ansible_default_ipv4.address) }}"

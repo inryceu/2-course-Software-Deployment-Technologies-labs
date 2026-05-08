@@ -1,4 +1,17 @@
 ---
+- name: Validate inventory structure
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Ensure required host groups are present
+      ansible.builtin.assert:
+        that:
+          - groups['db'] is defined
+          - groups['db'] | length > 0
+          - groups['workers'] is defined
+          - groups['workers'] | length > 0
+        fail_msg: "Inventory must define non-empty 'db' and 'workers' groups."
+
 - name: Base configuration for all hosts
   hosts: all
   become: true

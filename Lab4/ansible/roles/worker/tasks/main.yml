@@ -82,21 +82,24 @@
   ansible.builtin.command:
     cmd: pnpm install --frozen-lockfile
     chdir: "{{ app_dir }}"
-    creates: "{{ app_dir }}/node_modules/.modules.yaml"
   become_user: "{{ app_user }}"
 
 - name: Generate Prisma client
   ansible.builtin.command:
     cmd: pnpm prisma generate
     chdir: "{{ app_dir }}"
-    creates: "{{ app_dir }}/node_modules/.prisma/client/index.js"
+  become_user: "{{ app_user }}"
+
+- name: Apply Prisma schema to database
+  ansible.builtin.command:
+    cmd: pnpm prisma db push --skip-generate
+    chdir: "{{ app_dir }}"
   become_user: "{{ app_user }}"
 
 - name: Build NestJS application
   ansible.builtin.command:
     cmd: pnpm run build
     chdir: "{{ app_dir }}"
-    creates: "{{ app_dir }}/dist/src/main.js"
   become_user: "{{ app_user }}"
 
 - name: Deploy mywebapp systemd service unit
@@ -154,6 +157,11 @@
     path: /etc/nginx/sites-enabled/default
     state: absent
   notify: Restart Nginx
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
 
 - name: Ensure Nginx service is enabled and started
   ansible.builtin.systemd:
