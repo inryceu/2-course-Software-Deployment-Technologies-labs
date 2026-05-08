@@ -1,0 +1,186 @@
+---
+- name: Install base worker packages
+  ansible.builtin.apt:
+    name: "{{ worker_packages }}"
+    state: present
+    update_cache: true
+
+- name: Add NodeSource apt signing key
+  ansible.builtin.apt_key:
+    url: "{{ nodejs_apt_key_url }}"
+    state: present
+
+- name: Add Node.js 22 apt repository
+  ansible.builtin.apt_repository:
+    repo: "{{ nodejs_apt_repo }}"
+    filename: nodesource-nodejs22
+    state: present
+    update_cache: true
+
+- name: Install Node.js 22
+  ansible.builtin.apt:
+    name: nodejs
+    state: present
+
+- name: Install pnpm globally
+  community.general.npm:
+    name: pnpm
+    global: true
+    state: present
+
+- name: Ensure app system user exists
+  ansible.builtin.user:
+    name: "{{ app_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    state: present
+
+- name: Ensure operator user exists
+  ansible.builtin.user:
+    name: "{{ operator_user }}"
+    shell: /bin/bash
+    password: "{{ operator_password_plain | password_hash('sha512', 'lab4operator') }}"
+    state: present
+
+- name: Configure operator limited sudo access
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/operator
+    owner: root
+    group: root
+    mode: "0440"
+    content: |
+      {{ operator_user }} ALL=(root) NOPASSWD:/bin/systemctl start mywebapp.service,/bin/systemctl stop mywebapp.service,/bin/systemctl restart mywebapp.service,/bin/systemctl status mywebapp.service,/usr/sbin/nginx -s reload
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Ensure application directory exists
+  ansible.builtin.file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0755"
+
+- name: Copy application source to worker
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../app/"
+    dest: "{{ app_dir }}/"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: preserve
+
+- name: Render application .env file
+  ansible.builtin.template:
+    src: mywebapp.env
+    dest: "{{ app_dir }}/.env"
+    owner: "{{ app_user }}"
+    group: "{{ app_group }}"
+    mode: "0640"
+  notify: Restart mywebapp service
+
+- name: Install app dependencies with pnpm
+  ansible.builtin.command:
+    cmd: pnpm install --frozen-lockfile
+    chdir: "{{ app_dir }}"
+  become_user: "{{ app_user }}"
+
+- name: Generate Prisma client
+  ansible.builtin.command:
+    cmd: pnpm prisma generate
+    chdir: "{{ app_dir }}"
+  become_user: "{{ app_user }}"
+
+- name: Apply Prisma schema to database
+  ansible.builtin.command:
+    cmd: pnpm prisma db push --skip-generate
+    chdir: "{{ app_dir }}"
+  become_user: "{{ app_user }}"
+
+- name: Build NestJS application
+  ansible.builtin.command:
+    cmd: pnpm run build
+    chdir: "{{ app_dir }}"
+  become_user: "{{ app_user }}"
+
+- name: Deploy mywebapp systemd service unit
+  ansible.builtin.template:
+    src: mywebapp.service
+    dest: /etc/systemd/system/mywebapp.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd daemon
+    - Restart mywebapp service
+
+- name: Deploy mywebapp socket unit
+  ansible.builtin.template:
+    src: mywebapp.socket
+    dest: /etc/systemd/system/mywebapp.socket
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd daemon
+    - Restart mywebapp socket
+
+- name: Ensure mywebapp socket is enabled and started
+  ansible.builtin.systemd:
+    name: mywebapp.socket
+    enabled: true
+    state: started
+
+- name: Ensure mywebapp service is enabled and started
+  ansible.builtin.systemd:
+    name: mywebapp.service
+    enabled: true
+    state: started
+
+- name: Deploy Nginx site config
+  ansible.builtin.template:
+    src: mywebapp.conf
+    dest: /etc/nginx/sites-available/mywebapp.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Nginx
+
+- name: Enable mywebapp Nginx site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/mywebapp.conf
+    dest: /etc/nginx/sites-enabled/mywebapp.conf
+    state: link
+  notify: Restart Nginx
+
+- name: Disable default Nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart Nginx
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+
+- name: Ensure Nginx service is enabled and started
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Ensure /home/student directory exists
+  ansible.builtin.file:
+    path: /home/student
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create gradebook file
+  ansible.builtin.copy:
+    dest: "{{ gradebook_path }}"
+    content: "{{ gradebook_value }}\n"
+    owner: root
+    group: root
+    mode: "0644"

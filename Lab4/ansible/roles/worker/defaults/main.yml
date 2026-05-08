@@ -1,0 +1,27 @@
+---
+app_user: app
+app_group: app
+app_dir: /opt/mywebapp
+app_port: 5200
+
+operator_user: operator
+operator_password_plain: "12345678"
+
+nodejs_apt_repo: "deb https://deb.nodesource.com/node_22.x nodistro main"
+nodejs_apt_key_url: "https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+
+worker_packages:
+  - acl
+  - nginx
+  - git
+  - curl
+  - ca-certificates
+  - gnupg
+
+gradebook_path: /home/student/gradebook
+gradebook_value: "14840136"
+
+db_name: notes_db
+db_user: app
+db_password: app_secure_pass
+db_port: 3306

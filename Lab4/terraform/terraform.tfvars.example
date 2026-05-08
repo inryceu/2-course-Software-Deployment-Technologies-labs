@@ -1,0 +1,18 @@
+libvirt_uri       = "qemu:///system"
+storage_pool      = "default"
+ubuntu_cloud_image = "/var/lib/libvirt/images/ubuntu-24.04-server-cloudimg-amd64.img"
+
+# Use your real public key content.
+ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... student@host"
+
+network_name   = "lab4-network"
+network_domain = "lab4.local"
+network_cidr   = "192.168.150.0/24"
+
+worker_hostname  = "worker"
+worker_memory_mb = 4096
+worker_vcpu      = 2
+
+db_hostname  = "db"
+db_memory_mb = 2048
+db_vcpu      = 2

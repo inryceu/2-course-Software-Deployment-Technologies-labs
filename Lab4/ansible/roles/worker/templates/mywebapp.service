@@ -1,0 +1,15 @@
+[Unit]
+Description=MyWebApp Service
+Requires=mywebapp.socket
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_dir }}
+EnvironmentFile={{ app_dir }}/.env
+ExecStart=/usr/bin/node {{ app_dir }}/dist/src/main.js
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
