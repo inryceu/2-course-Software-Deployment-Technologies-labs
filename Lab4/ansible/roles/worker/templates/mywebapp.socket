@@ -1,0 +1,9 @@
+[Unit]
+Description=MyWebApp Socket
+
+[Socket]
+ListenStream=127.0.0.1:5200
+ReusePort=true
+
+[Install]
+WantedBy=sockets.target
