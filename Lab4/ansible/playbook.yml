@@ -1,0 +1,40 @@
+---
+- name: Base configuration for all hosts
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - common
+
+- name: Configure database node
+  hosts: db
+  become: true
+  gather_facts: true
+  roles:
+    - db
+
+- name: Configure worker node
+  hosts: workers
+  become: true
+  gather_facts: true
+  roles:
+    - worker
+
+  post_tasks:
+    - name: Wait for liveness endpoint through Nginx
+      ansible.builtin.uri:
+        url: "http://127.0.0.1/health/alive"
+        status_code: 200
+      register: liveness_result
+      retries: 20
+      delay: 3
+      until: liveness_result.status == 200
+
+    - name: Wait for readiness endpoint through Nginx
+      ansible.builtin.uri:
+        url: "http://127.0.0.1/health/ready"
+        status_code: 200
+      register: readiness_result
+      retries: 20
+      delay: 3
+      until: readiness_result.status == 200

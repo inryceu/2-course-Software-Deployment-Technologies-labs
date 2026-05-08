@@ -1,14 +1,14 @@
 [Unit]
 Description=MyWebApp Service
 Requires=mywebapp.socket
-After=network.target mariadb.service
+After=network.target
 
 [Service]
 Type=simple
-User=app
-WorkingDirectory=/opt/mywebapp
+User={{ app_user }}
+WorkingDirectory={{ app_dir }}
 
-EnvironmentFile=/opt/mywebapp/.env
+EnvironmentFile={{ app_dir }}/.env
 Environment=LISTEN_FDS=1
 Environment=LISTEN_PID=$MAINPID
 NonBlocking=true

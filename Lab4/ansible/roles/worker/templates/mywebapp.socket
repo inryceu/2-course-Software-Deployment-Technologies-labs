@@ -2,7 +2,7 @@
 Description=MyWebApp Socket
 
 [Socket]
-ListenStream=127.0.0.1:5200
+ListenStream=127.0.0.1:{{ app_port }}
 ReusePort=true
 
 [Install]
