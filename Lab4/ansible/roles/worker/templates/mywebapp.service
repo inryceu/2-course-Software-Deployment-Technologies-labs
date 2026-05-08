@@ -7,14 +7,8 @@ After=network.target
 Type=simple
 User={{ app_user }}
 WorkingDirectory={{ app_dir }}
-
 EnvironmentFile={{ app_dir }}/.env
-Environment=LISTEN_FDS=1
-Environment=LISTEN_PID=$MAINPID
-NonBlocking=true
-StandardInput=socket
-
-ExecStart=/usr/bin/node dist/src/main.js
+ExecStart=/usr/bin/node {{ app_dir }}/dist/src/main.js
 Restart=on-failure
 
 [Install]

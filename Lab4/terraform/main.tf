@@ -4,117 +4,80 @@ terraform {
   required_providers {
     libvirt = {
       source  = "dmacvicar/libvirt"
-      version = "~> 0.8"
+      version = "0.7.1" 
     }
   }
-}
+} 
 
 provider "libvirt" {
-  uri = var.libvirt_uri
-}
-
-locals {
-  cloud_init_worker = templatefile("${path.module}/cloud_init.cfg", {
-    hostname       = var.worker_hostname
-    ssh_public_key = var.ssh_public_key
-  })
-
-  cloud_init_db = templatefile("${path.module}/cloud_init.cfg", {
-    hostname       = var.db_hostname
-    ssh_public_key = var.ssh_public_key
-  })
+  uri = "qemu+unix:///system?socket=/var/run/libvirt/libvirt-sock"
 }
 
 resource "libvirt_network" "lab4_net" {
   name      = var.network_name
   mode      = "nat"
-  domain    = var.network_domain
   addresses = [var.network_cidr]
   autostart = true
+
+  dns {
+    enabled = true
+    local_only = true
+  }
 }
 
-resource "libvirt_cloudinit_disk" "worker_init" {
-  name      = "${var.worker_hostname}-cloud-init.iso"
-  pool      = var.storage_pool
-  user_data = local.cloud_init_worker
+resource "libvirt_cloudinit_disk" "common_init" {
+  for_each  = toset([var.worker_hostname, var.db_hostname])
+  name      = "${each.value}-init.iso"
+  user_data = templatefile("${path.module}/cloud_init.cfg", {
+    hostname       = each.value
+    ssh_public_key = var.ssh_public_key
+  })
+  meta_data = "" 
 }
 
-resource "libvirt_cloudinit_disk" "db_init" {
-  name      = "${var.db_hostname}-cloud-init.iso"
-  pool      = var.storage_pool
-  user_data = local.cloud_init_db
-}
-
-resource "libvirt_volume" "worker_disk" {
-  name   = "${var.worker_hostname}.qcow2"
+resource "libvirt_volume" "base_image" {
+  name   = "ubuntu-24-04-base"
   pool   = var.storage_pool
   source = var.ubuntu_cloud_image
   format = "qcow2"
 }
 
-resource "libvirt_volume" "db_disk" {
-  name   = "${var.db_hostname}.qcow2"
-  pool   = var.storage_pool
-  source = var.ubuntu_cloud_image
-  format = "qcow2"
+resource "libvirt_volume" "disks" {
+  for_each = {
+    worker = var.worker_hostname
+    db     = var.db_hostname
+  }
+  name           = "${each.value}.qcow2"
+  pool           = var.storage_pool
+  base_volume_id = libvirt_volume.base_image.id 
+  format         = "qcow2"
+  size           = 10737418240 
 }
 
-resource "libvirt_domain" "worker" {
-  name      = var.worker_hostname
-  memory    = var.worker_memory_mb
-  vcpu      = var.worker_vcpu
-  autostart = true
-  cloudinit = libvirt_cloudinit_disk.worker_init.id
+resource "libvirt_domain" "vms" {
+  for_each = {
+    worker = { name = var.worker_hostname, mem = var.worker_memory_mb, cpu = var.worker_vcpu }
+    db     = { name = var.db_hostname, mem = var.db_memory_mb, cpu = var.db_vcpu }
+  }
+
+  name   = each.value.name
+  memory = each.value.mem
+  vcpu   = each.value.cpu
+
+  cloudinit = libvirt_cloudinit_disk.common_init[each.value.name].id
 
   network_interface {
     network_id     = libvirt_network.lab4_net.id
-    hostname       = var.worker_hostname
     wait_for_lease = true
   }
 
   disk {
-    volume_id = libvirt_volume.worker_disk.id
+    volume_id = libvirt_volume.disks[each.key].id
   }
 
   console {
     type        = "pty"
-    target_type = "serial"
     target_port = "0"
-  }
-
-  graphics {
-    type        = "spice"
-    listen_type = "none"
-    autoport    = true
-  }
-}
-
-resource "libvirt_domain" "db" {
-  name      = var.db_hostname
-  memory    = var.db_memory_mb
-  vcpu      = var.db_vcpu
-  autostart = true
-  cloudinit = libvirt_cloudinit_disk.db_init.id
-
-  network_interface {
-    network_id     = libvirt_network.lab4_net.id
-    hostname       = var.db_hostname
-    wait_for_lease = true
-  }
-
-  disk {
-    volume_id = libvirt_volume.db_disk.id
-  }
-
-  console {
-    type        = "pty"
     target_type = "serial"
-    target_port = "0"
-  }
-
-  graphics {
-    type        = "spice"
-    listen_type = "none"
-    autoport    = true
   }
 }
